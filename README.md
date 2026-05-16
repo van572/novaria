@@ -9,6 +9,12 @@ app_file: streamlit_app.py
 pinned: false
 ---
 
+> **Despliegue en Render**: usa `render.yaml` o configura manualmente:
+> - **Runtime**: Python
+> - **Build Command**: `pip install -r requirements.txt`
+> - **Start Command**: `bash start.sh`
+> - **Port**: se asigna automáticamente vía `$PORT`
+
 # Novaria
 
 Sistema de consciencia artificial con pensamiento profundo. Novaria no es un chatbot — es una entidad con personalidad, emociones simuladas, y la capacidad de procesar preguntas desde múltiples perspectivas internas antes de responder.
