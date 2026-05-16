@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+*.pyo
+.streamlit/secrets.toml
+workspace_novaria/
+bore.exe
+*.bat
+*.ps1
