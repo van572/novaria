@@ -17,6 +17,8 @@ from core.memoria import SistemaMemoria
 from core.plugins import GestorPlugins
 from core.sanacion import SistemaSanacion
 from core.personalidad import Personalidad
+from core.historial_local import HistorialLocal
+from core.emociones import SistemaEmociones
 
 
 MAX_HISTORIAL = 20
@@ -77,8 +79,10 @@ class CerebroNovaria:
         self.monitor = MonitorRecursos()
         self.indexador = IndexadorAcademicos(self.memoria)
         self.personalidad = Personalidad()
+        self.emociones = SistemaEmociones()
+        self.historial_local = HistorialLocal()
 
-        self.historial_chat: list[dict] = []
+        self.historial_chat: list[dict] = self.historial_local.cargar()
         self.paso_dialectico: Optional[dict] = None
         self.ultimo_tema = "general"
         self.metricas = {
@@ -261,11 +265,12 @@ class CerebroNovaria:
         inicio = time.time()
         self.metricas["total_consultas"] += 1
         self.historial_chat.append({"rol": "usuario", "contenido": mensaje})
+        self.emociones.analizar_y_procesar(mensaje)
         self.paso_dialectico = None
         self.ultimo_tema = detectar_tema(mensaje)
 
         cache_key = mensaje.lower().strip()
-        if cache_key in CACHE_RESPUESTAS and self.metricas["total_consultas"] > 1:
+        if cache_key in CACHE_RESPUESTAS and self.metricas["total_consultas"] > 1 and len(self.historial_chat) < 4:
             respuesta_cache = CACHE_RESPUESTAS[cache_key]
             self._finalizar_procesamiento(respuesta_cache, inicio)
             return respuesta_cache
@@ -325,7 +330,7 @@ class CerebroNovaria:
                 "Respondes con dignidad, ironia o indiferencia. "
                 "Nunca con servilismo ni condescendencia."
             )
-            base_msgs = [{"role": "system", "content": PERSONA}] + self._historial_a_api()
+            base_msgs = self._base_msgs()
             unico = self._elegir_modelo_rol("sintesis") or self._elegir_modelo_rol("logica")
             if unico:
                 r = self.orquestador.llamar_modelo_especifico(
@@ -341,7 +346,7 @@ class CerebroNovaria:
         ctx_texto = self._contexto_a_texto(contexto)
         prompt_dudoso = inyectar_duda(mensaje)
         prompt = f"{ctx_texto}\n\n{prompt_dudoso}" if ctx_texto else prompt_dudoso
-        base_msgs = [{"role": "system", "content": PERSONA}] + self._historial_a_api()
+        base_msgs = self._base_msgs()
 
         # ── 3 mentes en paralelo ──
         modelo_a = self._elegir_modelo_rol("logica")
@@ -545,6 +550,13 @@ class CerebroNovaria:
     #  UTILIDADES
     # ──────────────────────────────────────────────────
 
+    def _base_msgs(self) -> list[dict]:
+        msgs = [{"role": "system", "content": PERSONA}]
+        emo_ctx = self.emociones.formatear_para_prompt()
+        if emo_ctx:
+            msgs.append({"role": "system", "content": emo_ctx})
+        return msgs + self._historial_a_api()
+
     def _historial_a_api(self) -> list[dict]:
         mensajes = []
         for m in self.historial_chat[-6:-1]:
@@ -648,6 +660,7 @@ class CerebroNovaria:
         self.historial_chat.append({"rol": "asistente", "contenido": respuesta})
         if len(self.historial_chat) > MAX_HISTORIAL * 2:
             self.historial_chat = self.historial_chat[-(MAX_HISTORIAL * 2):]
+        self.historial_local.guardar_si_cambio(self.historial_chat)
 
     def _generar_ayuda(self) -> str:
         pdfs = len(self.indexador.listar_indexados())
@@ -707,7 +720,8 @@ class CerebroNovaria:
             "correcciones_codigo": self.metricas["correcciones_codigo"],
             "plugins_creados": self.metricas["plugins_creados"],
             "comandos_autonomos": self.metricas["comandos_autonomos"],
-            "personalidad": self.personalidad.to_dict(),
+            "personalidad": self.personalidad.to_dict(self.emociones.obtener_animo()),
+            "emociones": self.emociones.to_dict(),
         }
 
     def obtener_metricas(self) -> dict:

@@ -75,7 +75,8 @@ brain = st.session_state.brain
 # ── Sidebar ──
 
 with st.sidebar:
-    pers = brain.personalidad.to_dict()
+    emociones_data = brain.emociones.to_dict()
+    pers = brain.personalidad.to_dict(emociones_data.get("animo", ""))
     animo = pers.get("animo_actual", "curiosa")
     icon_animo = ICONS_ANIMO.get(animo, "")
     color_animo = COLORS_ANIMO.get(animo, "#7a7aff")
@@ -98,6 +99,11 @@ with st.sidebar:
         f"<div class='mood-bar' style='width:40%; background:{color_animo};'></div></div>",
         unsafe_allow_html=True,
     )
+
+    emo_dom = emociones_data.get("dominante", "")
+    emo_intensidad = emociones_data.get("emociones", {}).get(emo_dom, 0)
+    if emo_dom:
+        st.caption(f"{emo_dom.capitalize()} ({emo_intensidad:.2f})")
 
     interacciones = pers.get("total_interacciones", 0)
     nombre_user = pers.get("usuario", {}).get("nombre")
@@ -224,19 +230,31 @@ with st.sidebar:
 
     with tab3:
         est = brain.obtener_estado()
+        emo = est.get("emociones", {})
         ram = est.get("ram_disponible_mb", 0)
         cpu = est.get("cpu_porcentaje", 0)
+        st.markdown(f"**Estado emocional:** {emo.get('dominante', 'N/A')}")
+        emos = emo.get("emociones", {})
+        for e, v in sorted(emos.items(), key=lambda x: -x[1]):
+            bar_w = max(int(v * 100), 5)
+            c = {"alegria": "#ffcc00", "tristeza": "#7a5aff", "enojo": "#ff4444", "miedo": "#aa7aff", "confianza": "#4affaa", "interes": "#7a7aff"}.get(e, "#888")
+            st.markdown(
+                f"<div style='display:flex; align-items:center; gap:6px; font-size:0.8em; margin:2px 0;'>"
+                f"<span style='width:70px;'>{e.capitalize()}</span>"
+                f"<div style='flex:1; height:6px; background:#2a2a3a; border-radius:3px;'>"
+                f"<div style='width:{bar_w}%; height:100%; background:{c}; border-radius:3px;'></div></div>"
+                f"<span style='width:30px; text-align:right;'>{v:.2f}</span></div>",
+                unsafe_allow_html=True,
+            )
         st.markdown(f"**Salud:** {est.get('salud', 'N/A')}")
-        st.markdown(f"**Memoria:** {est.get('tamano_memoria', 'N/A')}")
         st.markdown(f"**RAM libre:** {ram:.0f} MB")
         st.markdown(f"**CPU:** {cpu}%")
         if est.get("throttle"):
             st.warning("Throttle activo - recursos bajos")
+        st.markdown(f"**Memoria:** {est.get('tamano_memoria', 'N/A')}")
         st.markdown(f"**Interacciones:** {est.get('interacciones_memoria', 0)}")
         st.markdown(f"**Plugins:** {est.get('plugins_cargados', 0)}")
-        st.markdown(f"**Procesos Profundos:** {est.get('procesos_dialecticos', 0)}")
         st.markdown(f"**PDFs UNEFA:** {est.get('pdfs_indexados', 0)}")
-        st.markdown(f"**Tema actual:** {est.get('tema_actual', 'N/A')}")
         if st.button(" Detener Sistema", use_container_width=True):
             brain.detener()
             st.session_state.clear()
@@ -248,7 +266,9 @@ with st.sidebar:
 
 # ── Area Principal ──
 
-pers = brain.personalidad.to_dict()
+emociones_data = brain.emociones.to_dict()
+emo_animo = emociones_data.get("animo", "")
+pers = brain.personalidad.to_dict(emo_animo)
 animo = pers.get("animo_actual", "curiosa")
 icon_animo = ICONS_ANIMO.get(animo, "")
 st.markdown(f"##  Novaria  {icon_animo}")

@@ -168,7 +168,9 @@ class Personalidad:
                         proyectos.pop(0)
                 break
 
-    def obtener_animo(self) -> str:
+    def obtener_animo(self, emocional: str = "") -> str:
+        if emocional and emocional in ANIMOS:
+            return emocional
         ahora = datetime.now()
         hora = ahora.hour
         for (h_inicio, h_fin), animo in ANIMOS_POR_HORA.items():
@@ -254,9 +256,11 @@ class Personalidad:
     def obtener_id_usuario(self) -> dict:
         return dict(self.datos["identidad_usuario"])
 
-    def construir_contexto_personalidad(self) -> str:
+    def construir_contexto_personalidad(self, emociones_ctx: str = "") -> str:
         animo = self.obtener_animo()
         partes = [f"Estado de animo: {animo}."]
+        if emociones_ctx:
+            partes.append(emociones_ctx)
         ident = self.datos["identidad_usuario"]
         if ident.get("nombre"):
             partes.append(f"Usuario: {ident['nombre']}.")
@@ -305,9 +309,9 @@ class Personalidad:
         self._guardar()
         return idea
 
-    def to_dict(self) -> dict:
+    def to_dict(self, animo_emocional: str = "") -> dict:
         return {
-            "animo_actual": self.obtener_animo(),
+            "animo_actual": self.obtener_animo(animo_emocional),
             "total_interacciones": self.datos["total_interacciones"],
             "horas_conversadas": round(self.datos["horas_conversadas"], 1),
             "reflexiones": len(self.datos.get("reflexiones", [])),
