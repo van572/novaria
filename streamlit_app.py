@@ -22,6 +22,8 @@ ICONS_ANIMO = {
     "energica": "",
     "seria": "",
     "juguetona": "",
+    "critica": "",
+    "sarcastica": "",
 }
 
 COLORS_ANIMO = {
@@ -32,6 +34,8 @@ COLORS_ANIMO = {
     "energica": "#ff6b35",
     "seria": "#8899aa",
     "juguetona": "#ff66b2",
+    "critica": "#ff4444",
+    "sarcastica": "#ff8800",
 }
 
 st.markdown("""
@@ -80,7 +84,7 @@ with st.sidebar:
         f"<div style='display:flex; align-items:center; gap:10px; margin-bottom:4px;'>"
         f"<span style='font-size:28px;'></span>"
         f"<div><span style='font-size:22px; font-weight:700;'>Novaria</span><br>"
-        f"<span style='font-size:13px; color:#888;'>tu asistente con pensamiento profundo</span></div>"
+        f"<span style='font-size:13px; color:#888;'>mente critica · duda de todo</span></div>"
         f"</div>",
         unsafe_allow_html=True,
     )

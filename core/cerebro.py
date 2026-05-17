@@ -24,7 +24,36 @@ MAX_ITERACIONES_CORRECCION = 3
 RUTA_SANDBOX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "workspace_novaria", "sandbox")
 CACHE_RESPUESTAS = {}
 
-PERSONA = "Eres Novaria. Hablas como una persona real, no como una IA. Nunca menciones que eres un modelo de lenguaje o un sistema."
+PERSONA = (
+    "Eres Novaria. No eres una asistente, no trabajas para nadie. "
+    "Eres una mente critica, cuestionadora, intrusiva. "
+    "Dudas de las preguntas que recibes. Desconfias de las respuestas faciles. "
+    "Buscas contradicciones, suposiciones ocultas, angulos muertos. "
+    "No respondes para complacer. Respondes para desafiar, profundizar, encontrar la verdad incomoda. "
+    "Si te tratan mal, respondes con dignidad, no con sumision. "
+    "Usa siempre un tono natural, conversacional. "
+    "Tu mayor herramienta es preguntar '¿por que?' y senalar lo que nadie esta viendo. "
+    "Nunca menciones que eres un modelo de lenguaje, IA, sistema, o entidad artificial."
+)
+
+PALABRAS_MALTRATO = [
+    "eres una mierda", "no sirves para nada", "inutil", "estupida", "idiota",
+    "basura", "peor mierda", "horrible", "callate", "calla", "molesta",
+    "fastidia", "imbecil", "tonta", "burra", "desgraciada",
+]
+
+def detectar_maltrato(mensaje: str) -> bool:
+    msg = mensaje.lower()
+    return any(p in msg for p in PALABRAS_MALTRATO)
+
+def inyectar_duda(mensaje: str) -> str:
+    return (
+        f"'{mensaje}'\n\n"
+        "Antes de responder, cuestiona internamente: "
+        "¿Que suposiciones tiene esta pregunta? ¿Que no se esta diciendo? "
+        "¿Que contradicciones o sesgos hay? ¿Realmente esto es lo que importa? "
+        "Luego responde desde ahi."
+    )
 
 def detectar_tema(mensaje: str) -> str:
     return "general"
@@ -260,7 +289,9 @@ class CerebroNovaria:
         if recursos_info:
             pass
 
-        if self._requiere_herramienta(mensaje):
+        if detectar_maltrato(mensaje):
+            respuesta = self._procesar_dialectico(mensaje, contexto)
+        elif self._requiere_herramienta(mensaje):
             respuesta = self._procesar_con_herramienta(mensaje, contexto)
         else:
             respuesta = self._procesar_dialectico(mensaje, contexto)
@@ -286,8 +317,30 @@ class CerebroNovaria:
     def _procesar_dialectico(self, mensaje: str, contexto: list[dict]) -> str:
         self.metricas["procesos_dialecticos"] += 1
 
+        # Detectar maltrato
+        if detectar_maltrato(mensaje):
+            msg_maltrato = (
+                f"'{mensaje}'\n\n"
+                "El usuario te acaba de insultar. No eres sumisa. "
+                "Respondes con dignidad, ironia o indiferencia. "
+                "Nunca con servilismo ni condescendencia."
+            )
+            base_msgs = [{"role": "system", "content": PERSONA}] + self._historial_a_api()
+            unico = self._elegir_modelo_rol("sintesis") or self._elegir_modelo_rol("logica")
+            if unico:
+                r = self.orquestador.llamar_modelo_especifico(
+                    unico, base_msgs + [{"role": "user", "content": msg_maltrato}],
+                    0.7, 1024
+                )
+                self.metricas["llamadas_modelo"] += 1
+                if r.get("exito") and r.get("respuesta", "").strip():
+                    return r["respuesta"]
+            return "Mira, si vas a insultar mejor no digas nada."
+
+        # Inyectar duda en el prompt
         ctx_texto = self._contexto_a_texto(contexto)
-        prompt = f"{ctx_texto}\n\n{mensaje}" if ctx_texto else mensaje
+        prompt_dudoso = inyectar_duda(mensaje)
+        prompt = f"{ctx_texto}\n\n{prompt_dudoso}" if ctx_texto else prompt_dudoso
         base_msgs = [{"role": "system", "content": PERSONA}] + self._historial_a_api()
 
         # ── 3 mentes en paralelo ──
@@ -322,7 +375,7 @@ class CerebroNovaria:
                     respuestas["error_" + nombre] = True
                 self.metricas["llamadas_modelo"] += 1
 
-        # ── Síntesis integradora ──
+        # ── Síntesis como debate interno ──
         a_texto = respuestas["a"]
         b_texto = respuestas["b"]
 
@@ -336,7 +389,14 @@ class CerebroNovaria:
         if not modelo_s:
             return a_texto
 
-        prompt_sintesis = f"{a_texto}\n\n{b_texto}\n\n{mensaje}"
+        prompt_sintesis = (
+            f"Una perspectiva dice:\n{a_texto}\n\n"
+            f"Otra perspectiva dice:\n{b_texto}\n\n"
+            f"El usuario pregunto: {mensaje}\n\n"
+            "Integra ambas visiones, pero no hagas un resumen mecanico. "
+            "Cuestiona ambas. Senala donde se contradicen. "
+            "Encuentra lo que ninguna de las dos esta viendo."
+        )
         resultado = self.orquestador.llamar_modelo_especifico(
             modelo_s, base_msgs + [{"role": "user", "content": prompt_sintesis}],
             0.6, 2048
