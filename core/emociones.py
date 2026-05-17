@@ -2,10 +2,12 @@ import os
 import json
 import time
 import random
+import socket
 import threading
 
+_DISPOSITIVO = os.environ.get("COMPUTERNAME") or socket.gethostname() or "desconocido"
 RUTA_BASE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "workspace_novaria")
-RUTA_EMOCIONES = os.path.join(RUTA_BASE, "emociones.json")
+RUTA_EMOCIONES = os.path.join(RUTA_BASE, f"emociones_{_DISPOSITIVO}.json")
 
 EMOCIONES_BASE = ["alegria", "tristeza", "enojo", "miedo", "confianza", "interes"]
 VALOR_BASE = 0.15

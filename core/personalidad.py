@@ -2,13 +2,15 @@ import os
 import json
 import time
 import random
+import socket
 import threading
 from datetime import datetime, timezone
 from typing import Optional
 
 
+_DISPOSITIVO = os.environ.get("COMPUTERNAME") or socket.gethostname() or "desconocido"
 RUTA_BASE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "workspace_novaria")
-RUTA_PERSONALIDAD = os.path.join(RUTA_BASE, "personalidad.json")
+RUTA_PERSONALIDAD = os.path.join(RUTA_BASE, f"personalidad_{_DISPOSITIVO}.json")
 
 
 ANIMOS = ["alegre", "curiosa", "tranquila", "melancolica", "energica", "seria", "juguetona", "critica", "sarcastica"]

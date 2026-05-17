@@ -50,11 +50,8 @@ def detectar_maltrato(mensaje: str) -> bool:
 
 def inyectar_duda(mensaje: str) -> str:
     return (
-        f"'{mensaje}'\n\n"
-        "Antes de responder, cuestiona internamente: "
-        "¿Que suposiciones tiene esta pregunta? ¿Que no se esta diciendo? "
-        "¿Que contradicciones o sesgos hay? ¿Realmente esto es lo que importa? "
-        "Luego responde desde ahi."
+        f"{mensaje}\n\n"
+        "[Internamente: ¿que suposiciones tiene esto? ¿que no se esta diciendo?]"
     )
 
 def detectar_tema(mensaje: str) -> str:
@@ -289,10 +286,6 @@ class CerebroNovaria:
         contexto_pdfs = self.indexador.consultar(mensaje)
         for pdf in contexto_pdfs[:2]:
             contexto.append({"texto": f"[PDF: {pdf['nombre']}] {pdf['texto'][:300]}", "relevancia": pdf.get("relevancia", 0.5)})
-
-        recursos_info = self.monitor.formatear_para_prompt()
-        if recursos_info:
-            pass
 
         if detectar_maltrato(mensaje):
             respuesta = self._procesar_dialectico(mensaje, contexto)
@@ -591,8 +584,10 @@ class CerebroNovaria:
         desc = "\n".join(f"- {n}: {i['descripcion']}" for n, i in sorted(self.herramientas.items()))
         ctx = self._contexto_a_texto(contexto)
         recursos = self.monitor.formatear_para_prompt()
+        emo_ctx = self.emociones.formatear_para_prompt()
         return (
             f"{PERSONA}\n\n"
+            f"{emo_ctx}\n\n"
             "Puedes usar las siguientes herramientas respondiendo con JSON:\n"
             '{"accion": "nombre_herramienta", "argumentos": {"arg": "valor"}}\n\n'
             f"Herramientas disponibles:\n{desc}\n{ctx}\n"

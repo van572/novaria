@@ -1,11 +1,14 @@
 import os
 import json
 import time
+import socket
 import threading
 from typing import Optional
 
+_DISPOSITIVO = os.environ.get("COMPUTERNAME") or socket.gethostname() or "desconocido"
+
 RUTA_BASE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "workspace_novaria")
-RUTA_HISTORIAL = os.path.join(RUTA_BASE, "historial_chat.json")
+RUTA_HISTORIAL = os.path.join(RUTA_BASE, f"historial_chat_{_DISPOSITIVO}.json")
 MAX_HISTORIAL_LOCAL = 200
 
 
