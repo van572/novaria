@@ -274,7 +274,7 @@ class OrquestadorModelos:
         respuesta = texto.replace(prompt, "").strip()
         return {"exito": True, "respuesta": respuesta}
 
-    def llamar_modelo_especifico(self, nombre_modelo: str, mensajes: list[dict], temperature: float = 0.7, max_tokens: int = 2048) -> dict:
+    def llamar_modelo_especifico(self, nombre_modelo: str, mensajes: list[dict], temperature: float = 0.7, max_tokens: int = 2048, frequency_penalty: float = 0.0, presence_penalty: float = 0.0) -> dict:
         info = self.modelos.get(nombre_modelo)
         if not info:
             return {"exito": False, "mensaje": f"Modelo '{nombre_modelo}' no registrado", "modelo": nombre_modelo}
@@ -292,6 +292,8 @@ class OrquestadorModelos:
                     "messages": mensajes,
                     "temperature": temperature,
                     "max_tokens": max_tokens,
+                    "frequency_penalty": frequency_penalty,
+                    "presence_penalty": presence_penalty,
                 }
                 resp = requests.post(info.endpoint, headers=headers, json=payload, timeout=60)
                 resp.raise_for_status()

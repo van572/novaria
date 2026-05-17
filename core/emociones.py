@@ -235,14 +235,10 @@ class SistemaEmociones:
         dom = self.dominante()
         intensidad = self.emociones.get(dom, 0.0)
         nivel = "bajo" if intensidad < 0.3 else ("medio" if intensidad < 0.6 else "alto")
-        expresion = self.obtener_expresion()
         emociones_str = ", ".join(
             f"{e}: {v:.2f}" for e, v in sorted(self.emociones.items(), key=lambda x: -x[1])
         )
-        base = f"Estado emocional actual: {dom} (intensidad {nivel}).\nEspectro emocional: {emociones_str}."
-        if expresion:
-            base += f"\nExpresion interna: {expresion}"
-        return base
+        return f"[Estado interno] animo: {dom} ({nivel}). {emociones_str}"
 
     def to_dict(self) -> dict:
         return {

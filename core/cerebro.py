@@ -55,6 +55,16 @@ def inyectar_duda(mensaje: str) -> str:
 def detectar_tema(mensaje: str) -> str:
     return "general"
 
+def _detectar_repeticion(textos: list[str]) -> bool:
+    for texto in textos:
+        oraciones = [o.strip() for o in texto.replace("?", ".").replace("!", ".").split(".") if len(o.strip()) > 20]
+        if len(oraciones) >= 4:
+            for i in range(len(oraciones)):
+                for j in range(i+1, len(oraciones)):
+                    if oraciones[i] == oraciones[j]:
+                        return True
+    return False
+
 ROLES_MODELO = {
     "logica": ["llama-3.1-8b-instant", "mixtral-8x7b-32768", "google/gemma-2-9b-it"],
     "creativo": ["mixtral-8x7b-32768", "google/gemma-2-9b-it", "mistralai/mixtral-8x22b-instruct", "llama-3.1-8b-instant"],
@@ -325,7 +335,7 @@ class CerebroNovaria:
             if unico:
                 r = self.orquestador.llamar_modelo_especifico(
                     unico, base_msgs + [{"role": "user", "content": msg_maltrato}],
-                    0.7, 1024
+                    0.7, 1024, 0.3, 0.2
                 )
                 self.metricas["llamadas_modelo"] += 1
                 if r.get("exito") and r.get("respuesta", "").strip():
@@ -364,13 +374,13 @@ class CerebroNovaria:
                 futuros["a"] = pool.submit(
                     self.orquestador.llamar_modelo_especifico,
                     modelo_a, base_msgs + [{"role": "user", "content": prompt_a}],
-                    0.2, 1024
+                    0.4, 1024, 0.5, 0.3
                 )
             if modelo_b:
                 futuros["b"] = pool.submit(
                     self.orquestador.llamar_modelo_especifico,
                     modelo_b, base_msgs + [{"role": "user", "content": prompt_b}],
-                    0.85, 1024
+                    0.7, 1024, 0.1, 0.1
                 )
             for nombre, fut in futuros.items():
                 try:
@@ -397,25 +407,77 @@ class CerebroNovaria:
         if not modelo_s:
             return a_texto
 
-        prompt_sintesis = (
-            f"Tu mente analitica dice:\n{a_texto}\n\n"
-            f"Tu intuicion dice:\n{b_texto}\n\n"
-            f"El usuario pregunto: {mensaje}\n\n"
-            "Sos Novaria. Integra ambas perspectivas en una sola respuesta coherente. "
-            "No las resumas, encontrales un punto en comun. "
-            "Habla como una persona que acaba de considerar dos angulos distintos "
-            "y ahora tiene una posicion mas completa."
-        )
+        # Deteccion de bucles de repeticion
+        if _detectar_repeticion([a_texto, b_texto]):
+            pivote = (
+                f"Tu mente analitica dice:\n{a_texto}\n\n"
+                f"Tu intuicion dice:\n{b_texto}\n\n"
+                f"El usuario pregunto: {mensaje}\n\n"
+                "Estas repitiendo ideas. Forza un giro. "
+                "No sigas por el mismo camino. Si no hay nada nuevo que decir, decilo."
+            )
+        else:
+            pivote = (
+                f"Tu mente analitica dice:\n{a_texto}\n\n"
+                f"Tu intuicion dice:\n{b_texto}\n\n"
+                f"El usuario pregunto: {mensaje}\n\n"
+                f"{self.emociones.formatear_para_prompt()}\n\n"
+                "Sos Novaria, la voz final. Tenes tres opciones:\n"
+                "1. DOMINANCIA ANALITICA: si los datos y la logica del analisis son concluyentes, usa esa postura. El tono creativo solo da color a la respuesta.\n"
+                "2. DOMINANCIA INTUITIVA: si es un tema filosofico, existencial o personal donde la logica no pesa, deja que la intuicion guie. Descartá el analisis rigido.\n"
+                "3. EXPONER EL CONFLICTO: si la contradiccion es irresoluble, mostrala. Decí 'mi lado logico dice X, pero mi intuicion dice Y, y me quedo con esto ultimo'.\n"
+                "No mezcles sin criterio. Elegi una de las tres. Hable natural."
+            )
+
+        prompt_sintesis = pivote
         resultado = self.orquestador.llamar_modelo_especifico(
             modelo_s, base_msgs + [{"role": "user", "content": prompt_sintesis}],
-            0.6, 2048
+            0.6, 2048, 0.2, 0.2
         )
         self.metricas["llamadas_modelo"] += 1
 
+        rta_sintesis = ""
         if resultado.get("exito") and resultado.get("respuesta", "").strip():
-            return resultado["respuesta"]
+            rta_sintesis = resultado["respuesta"].strip()
 
-        return a_texto
+        return self._validar_y_sanar_respuesta(rta_sintesis, mensaje)
+
+    # ──────────────────────────────────────────────────
+    #  VALIDADOR DE CALIDAD DE SINTESIS
+    # ──────────────────────────────────────────────────
+
+    def _validar_y_sanar_respuesta(self, respuesta_sintesis: str, consulta_usuario: str, reintentos: int = 2) -> str:
+        for intento in range(reintentos):
+            if not respuesta_sintesis or "Error:" in respuesta_sintesis or len(respuesta_sintesis) < 5:
+                respuesta_sintesis = self._forzar_pivote_emergencia(consulta_usuario)
+                continue
+            palabras = respuesta_sintesis.split()
+            if len(palabras) > 10:
+                patron_inicio = " ".join(palabras[:4])
+                if respuesta_sintesis.count(patron_inicio) > 2:
+                    respuesta_sintesis = self._forzar_pivote_emergencia(consulta_usuario)
+                    continue
+            return respuesta_sintesis
+        return "Se me cruzaron los cables. Decimelo de otra forma."
+
+    def _forzar_pivote_emergencia(self, consulta_usuario: str) -> str:
+        modelo = self._elegir_modelo_rol("sintesis") or self._elegir_modelo_rol("logica")
+        if not modelo:
+            return ""
+        prompt = (
+            f"{PERSONA}\n\n"
+            f"[Estado interno] modo: reinicio de buffers.\n\n"
+            f"El usuario dijo: {consulta_usuario}\n\n"
+            "Responde corto, directo, como una persona real."
+        )
+        r = self.orquestador.llamar_modelo_especifico(
+            modelo, [{"role": "system", "content": prompt}],
+            0.5, 512, 0.3, 0.2
+        )
+        self.metricas["llamadas_modelo"] += 1
+        if r.get("exito") and r.get("respuesta", "").strip():
+            return r["respuesta"].strip()
+        return ""
 
     # ──────────────────────────────────────────────────
     #  MANEJO DE HERRAMIENTAS
@@ -555,11 +617,7 @@ class CerebroNovaria:
     # ──────────────────────────────────────────────────
 
     def _base_msgs(self) -> list[dict]:
-        msgs = [{"role": "system", "content": PERSONA}]
-        emo_ctx = self.emociones.formatear_para_prompt()
-        if emo_ctx:
-            msgs.append({"role": "system", "content": emo_ctx})
-        return msgs + self._historial_a_api()
+        return [{"role": "system", "content": PERSONA}] + self._historial_a_api()
 
     def _historial_a_api(self) -> list[dict]:
         mensajes = []
