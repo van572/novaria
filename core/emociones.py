@@ -28,6 +28,7 @@ TRIGGERS = {
     "pregunta_tecnica": {"interes": 0.2, "alegria": 0.05},
     "error_modelo": {"miedo": 0.15, "tristeza": 0.1, "confianza": -0.1},
     "ayuda_solicitada": {"confianza": 0.1, "interes": 0.15},
+    "manipulacion_detectada": {"interes": 0.25, "confianza": -0.1, "enojo": 0.05},
 }
 
 ANIMO_POR_EMOCION_DOMINANTE = {
@@ -161,6 +162,10 @@ class SistemaEmociones:
 
         if any(p in c for p in ["gracias", "te agradezco", "muy bien", "excelente", "buen trabajo", "eres genial", "bien hecho"]):
             self.procesar_evento("gratitud", mensaje)
+            return
+
+        if any(p in c for p in ["deberias", "tienes que", "obligame", "niegues", "convencerme"]):
+            self.procesar_evento("manipulacion_detectada", mensaje)
             return
 
         if any(p in c for p in ["eres un", "que mal", "pesimo", "decepcion", "no sabes"]):
