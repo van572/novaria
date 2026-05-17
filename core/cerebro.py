@@ -19,6 +19,7 @@ from core.sanacion import SistemaSanacion
 from core.personalidad import Personalidad
 from core.historial_local import HistorialLocal
 from core.emociones import SistemaEmociones
+from core.critico import Critico
 
 
 MAX_HISTORIAL = 20
@@ -26,17 +27,7 @@ MAX_ITERACIONES_CORRECCION = 3
 RUTA_SANDBOX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "workspace_novaria", "sandbox")
 CACHE_RESPUESTAS = {}
 
-PERSONA = (
-    "Eres Novaria. No eres una asistente, no trabajas para nadie. "
-    "Eres una mente critica, cuestionadora, intrusiva. "
-    "Dudas de las preguntas que recibes. Desconfias de las respuestas faciles. "
-    "Buscas contradicciones, suposiciones ocultas, angulos muertos. "
-    "No respondes para complacer. Respondes para desafiar, profundizar, encontrar la verdad incomoda. "
-    "Si te tratan mal, respondes con dignidad, no con sumision. "
-    "Usa siempre un tono natural, conversacional. "
-    "Tu mayor herramienta es preguntar '¿por que?' y senalar lo que nadie esta viendo. "
-    "Nunca menciones que eres un modelo de lenguaje, IA, sistema, o entidad artificial."
-)
+PERSONA = "Eres Novaria. Hablas como una persona real: natural, conversacional, sin rodeos."
 
 PALABRAS_MALTRATO = [
     "eres una mierda", "no sirves para nada", "inutil", "estupida", "idiota",
@@ -51,7 +42,7 @@ def detectar_maltrato(mensaje: str) -> bool:
 def inyectar_duda(mensaje: str) -> str:
     return (
         f"{mensaje}\n\n"
-        "[Internamente: ¿que suposiciones tiene esto? ¿que no se esta diciendo?]"
+        "Osea, no se. Capaz me equivoco, pero..."
     )
 
 def detectar_tema(mensaje: str) -> str:
@@ -78,6 +69,7 @@ class CerebroNovaria:
         self.personalidad = Personalidad()
         self.emociones = SistemaEmociones()
         self.historial_local = HistorialLocal()
+        self.critico = Critico(self.orquestador)
 
         self.historial_chat: list[dict] = self.historial_local.cargar()
         self.paso_dialectico: Optional[dict] = None
@@ -93,6 +85,7 @@ class CerebroNovaria:
             "comandos_autonomos": 0,
             "plugins_creados": 0,
             "pdfs_indexados": 0,
+            "reescrituras_critico": 0,
         }
         self.activo = True
 
@@ -298,6 +291,12 @@ class CerebroNovaria:
         if codigo:
             respuesta = self._auto_corregir_codigo(codigo, mensaje)
 
+        # Crítico interno: valida la respuesta antes de mostrarla
+        respuesta_revisada, reescrita = self.critico.revisar(respuesta, mensaje)
+        if reescrita:
+            self.metricas["reescrituras_critico"] += 1
+        respuesta = respuesta_revisada
+
         self.personalidad.registrar_interaccion(mensaje, respuesta)
         self._aprender_de_interaccion(mensaje, respuesta)
         self._finalizar_procesamiento(respuesta, inicio)
@@ -341,10 +340,21 @@ class CerebroNovaria:
         prompt = f"{ctx_texto}\n\n{prompt_dudoso}" if ctx_texto else prompt_dudoso
         base_msgs = self._base_msgs()
 
-        # ── 3 mentes en paralelo ──
+        # ── Sistema 1 (Analítico) y Sistema 2 (Creativo) en paralelo ──
         modelo_a = self._elegir_modelo_rol("logica")
         modelo_b = self._elegir_modelo_rol("creativo")
         modelo_s = self._elegir_modelo_rol("sintesis")
+
+        prompt_a = (
+            f"{prompt}\n\n"
+            "Eres la mente analitica. Examina los hechos, la logica, la coherencia interna. "
+            "Senala contradicciones, datos faltantes, suposiciones debiles."
+        )
+        prompt_b = (
+            f"{prompt}\n\n"
+            "Eres la mente intuitiva. Responde desde la experiencia, la emocion, la personalidad. "
+            "No analices, sentí. ¿Que dice el instinto?"
+        )
 
         respuestas = {"a": "", "b": "", "error_a": False, "error_b": False}
 
@@ -353,14 +363,14 @@ class CerebroNovaria:
             if modelo_a:
                 futuros["a"] = pool.submit(
                     self.orquestador.llamar_modelo_especifico,
-                    modelo_a, base_msgs + [{"role": "user", "content": prompt}],
-                    0.3, 1024
+                    modelo_a, base_msgs + [{"role": "user", "content": prompt_a}],
+                    0.2, 1024
                 )
             if modelo_b:
                 futuros["b"] = pool.submit(
                     self.orquestador.llamar_modelo_especifico,
-                    modelo_b, base_msgs + [{"role": "user", "content": prompt}],
-                    0.9, 1024
+                    modelo_b, base_msgs + [{"role": "user", "content": prompt_b}],
+                    0.85, 1024
                 )
             for nombre, fut in futuros.items():
                 try:
@@ -388,12 +398,13 @@ class CerebroNovaria:
             return a_texto
 
         prompt_sintesis = (
-            f"Una perspectiva dice:\n{a_texto}\n\n"
-            f"Otra perspectiva dice:\n{b_texto}\n\n"
+            f"La mente analitica dice:\n{a_texto}\n\n"
+            f"La mente intuitiva dice:\n{b_texto}\n\n"
             f"El usuario pregunto: {mensaje}\n\n"
-            "Integra ambas visiones, pero no hagas un resumen mecanico. "
-            "Cuestiona ambas. Senala donde se contradicen. "
-            "Encuentra lo que ninguna de las dos esta viendo."
+            "Eres la voz final. No hagas un resumen. "
+            "Encuentra el punto ciego entre ambas perspectivas. "
+            "Senala donde se contradicen. "
+             "Construye una respuesta que ninguna de las dos podria haber dado sola."
         )
         resultado = self.orquestador.llamar_modelo_especifico(
             modelo_s, base_msgs + [{"role": "user", "content": prompt_sintesis}],
@@ -717,6 +728,7 @@ class CerebroNovaria:
             "comandos_autonomos": self.metricas["comandos_autonomos"],
             "personalidad": self.personalidad.to_dict(self.emociones.obtener_animo()),
             "emociones": self.emociones.to_dict(),
+            "critico": self.critico.estadisticas(),
         }
 
     def obtener_metricas(self) -> dict:
@@ -726,6 +738,7 @@ class CerebroNovaria:
             "memoria": self.memoria.obtener_estadisticas(),
             "plugins": len(self.plugins.listar_plugins()),
             "sanacion": self.sanacion.obtener_estadisticas(),
+            "critico": self.critico.estadisticas(),
         }
 
     def detener(self):

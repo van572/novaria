@@ -218,7 +218,9 @@ with st.sidebar:
             st.metric("Plugins", est.get("plugins_creados", 0))
         st.metric("Tasa de Exito", f"{est.get('tasa_exito', 0)}%")
         s = metricas.get("sanacion", {})
+        crit = metricas.get("critico", {})
         st.caption(f"Sanacion: {s.get('sanaciones_exitosas', 0)}/{s.get('intentos_sanacion', 0)}")
+        st.caption(f"Critico: {crit.get('total_reescrituras', 0)}/{crit.get('total_revisiones', 0)} reescritas")
 
     with tab2:
         modelos = brain.orquestador.obtener_modelos_disponibles()
