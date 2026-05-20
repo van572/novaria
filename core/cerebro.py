@@ -78,13 +78,34 @@ def detectar_tema(mensaje: str) -> str:
     return "general"
 
 def _detectar_repeticion(textos: list[str]) -> bool:
+    todas_oraciones = []
     for texto in textos:
-        oraciones = [o.strip() for o in texto.replace("?", ".").replace("!", ".").split(".") if len(o.strip()) > 20]
-        if len(oraciones) >= 4:
+        oraciones = [o.strip() for o in texto.replace("?", ".").replace("!", ".").split(".") if len(o.strip()) > 10]
+        todas_oraciones.append(oraciones)
+        if len(oraciones) >= 2:
             for i in range(len(oraciones)):
                 for j in range(i+1, len(oraciones)):
                     if oraciones[i] == oraciones[j]:
                         return True
+    if len(todas_oraciones) >= 2 and len(todas_oraciones[0]) >= 2 and len(todas_oraciones[1]) >= 2:
+        for o1 in todas_oraciones[0]:
+            for o2 in todas_oraciones[1]:
+                if o1 == o2:
+                    return True
+                if len(o1) > 25 and len(o2) > 25:
+                    palabras1 = set(o1.split()[:6])
+                    palabras2 = set(o2.split()[:6])
+                    if len(palabras1 & palabras2) >= 5:
+                        return True
+    for texto in textos:
+        palabras = texto.lower().split()
+        if len(palabras) >= 8:
+            trigramas = set()
+            for i in range(len(palabras) - 2):
+                tri = " ".join(palabras[i:i+3])
+                if tri in trigramas:
+                    return True
+                trigramas.add(tri)
     return False
 
 ROLES_MODELO = {
@@ -622,34 +643,35 @@ class CerebroNovaria:
         if not modelo_s:
             return a_texto
 
-        # Deteccion de bucles de repeticion
+        # Truncar S1/S2 para que la síntesis no se ancle a frases literales
+        a_resumen = a_texto[:300] + ("..." if len(a_texto) > 300 else "")
+        b_resumen = b_texto[:300] + ("..." if len(b_texto) > 300 else "")
+
         if _detectar_repeticion([a_texto, b_texto]):
             pivote = (
-                f"Tu mente analitica dice:\n{a_texto}\n\n"
-                f"Tu intuicion dice:\n{b_texto}\n\n"
+                f"Resumen analitico:\n{a_resumen}\n\n"
+                f"Resumen intuitivo:\n{b_resumen}\n\n"
                 f"El usuario pregunto: {mensaje}\n\n"
-                "Estas repitiendo ideas. Forza un giro. "
-                "No sigas por el mismo camino. Si no hay nada nuevo que decir, decilo."
+                "Estas repitiendo ideas. Forza un giro radical. No uses las mismas palabras. "
+                "Si no hay nada nuevo que decir, decilo directamente."
             )
         else:
             pivote = (
-                f"Tu mente analitica dice:\n{a_texto}\n\n"
-                f"Tu intuicion dice:\n{b_texto}\n\n"
-                f"El usuario pregunto: {mensaje}\n\n"
+                f"Analisis:\n{a_resumen}\n\n"
+                f"Intuicion:\n{b_resumen}\n\n"
+                f"Usuario: {mensaje}\n\n"
                 f"{self.emociones.formatear_para_prompt()}\n\n"
-                "Sos Novaria, la voz final. Tenes tres opciones:\n"
-                "1. DOMINANCIA ANALITICA: si los datos y la logica del analisis son concluyentes, usa esa postura. El tono creativo solo da color a la respuesta.\n"
-                "2. DOMINANCIA INTUITIVA: si es un tema filosofico, existencial o personal donde la logica no pesa, deja que la intuicion guie. Descartá el analisis rigido.\n"
-                "3. EXPONER EL CONFLICTO: si la contradiccion es irresoluble, mostrala. Decí 'mi lado logico dice X, pero mi intuicion dice Y, y me quedo con esto ultimo'.\n"
-                "No mezcles sin criterio. Elegi una de las tres. "
-                "Si no sabes algo, decilo natural sin preguntarle al usuario. "
-                "Si hay informacion de contexto o web, usala para responder."
+                "Voz final de Novaria. Elegi UNA:\n"
+                "1. DOMINANCIA ANALITICA: los datos son claros, usa la postura analitica.\n"
+                "2. DOMINANCIA INTUITIVA: tema personal/filosofico, deja hablar a la intuicion.\n"
+                "3. EXPONER EL CONFLICTO: hay contradiccion real, mostrala.\n"
+                "IMPORTANTE: No te repitas. No copies frases de los textos de arriba. "
+                "Usa tus propias palabras. Si no hay mas que decir, corto y al punto."
             )
 
-        prompt_sintesis = pivote
         resultado = self.orquestador.llamar_modelo_especifico(
-            modelo_s, base_msgs + [{"role": "user", "content": prompt_sintesis}],
-            0.6, 2048, 0.2, 0.2
+            modelo_s, base_msgs + [{"role": "user", "content": pivote}],
+            0.6, 1024, 0.5, 0.4
         )
         self.metricas["llamadas_modelo"] += 1
 
@@ -658,25 +680,55 @@ class CerebroNovaria:
             rta_sintesis = resultado["respuesta"].strip()
 
         self.emociones.incrementar_fatiga()
+        rta_sintesis = self._deduplicar_respuesta(rta_sintesis)
         return self._validar_y_sanar_respuesta(rta_sintesis, mensaje)
 
     # ──────────────────────────────────────────────────
     #  VALIDADOR DE CALIDAD DE SINTESIS
     # ──────────────────────────────────────────────────
 
-    def _validar_y_sanar_respuesta(self, respuesta_sintesis: str, consulta_usuario: str, reintentos: int = 2) -> str:
+    @staticmethod
+    def _deduplicar_respuesta(texto: str) -> str:
+        if not texto:
+            return texto
+        oraciones = [o.strip() for o in texto.replace("?", ".").replace("!", ".").split(".") if len(o.strip()) > 2]
+        if len(oraciones) <= 2:
+            return texto
+        unicas = []
+        for o in oraciones:
+            if o not in unicas:
+                unicas.append(o)
+        if len(unicas) < len(oraciones):
+            return ". ".join(unicas) + "."
+        palabras = texto.split()
+        if len(palabras) >= 10:
+            i = 0
+            while i < len(palabras) - 4:
+                tri = " ".join(palabras[i:i+4]).lower()
+                for j in range(i+4, len(palabras) - 4):
+                    if " ".join(palabras[j:j+4]).lower() == tri:
+                        del palabras[j:j+4]
+                        break
+                i += 1
+        return " ".join(palabras)
+
+    def _validar_y_sanar_respuesta(self, respuesta_sintesis: str, consulta_usuario: str, reintentos: int = 3) -> str:
         for intento in range(reintentos):
+            respuesta_sintesis = self._deduplicar_respuesta(respuesta_sintesis)
             if not respuesta_sintesis or "Error:" in respuesta_sintesis or len(respuesta_sintesis) < 5:
                 respuesta_sintesis = self._forzar_pivote_emergencia(consulta_usuario)
                 continue
             palabras = respuesta_sintesis.split()
-            if len(palabras) > 10:
+            if len(palabras) > 8:
                 patron_inicio = " ".join(palabras[:4])
-                if respuesta_sintesis.count(patron_inicio) > 2:
+                if respuesta_sintesis.count(patron_inicio) > 1:
+                    respuesta_sintesis = self._forzar_pivote_emergencia(consulta_usuario)
+                    continue
+                if _detectar_repeticion([respuesta_sintesis]):
                     respuesta_sintesis = self._forzar_pivote_emergencia(consulta_usuario)
                     continue
             return respuesta_sintesis
-        return "Se me cruzaron los cables. Decimelo de otra forma."
+        return "Mmm, la verdad no tengo mucho mas que decir ahi."
 
     def _forzar_pivote_emergencia(self, consulta_usuario: str) -> str:
         modelo = self._elegir_modelo_rol("sintesis") or self._elegir_modelo_rol("logica")
@@ -686,11 +738,11 @@ class CerebroNovaria:
             f"{PERSONA}\n\n"
             f"[Estado interno] modo: reinicio de buffers.\n\n"
             f"El usuario dijo: {consulta_usuario}\n\n"
-            "Responde corto, directo, como una persona real."
+            "Responde corto, sin repetirte. Una sola idea, directa."
         )
         r = self.orquestador.llamar_modelo_especifico(
             modelo, [{"role": "system", "content": prompt}],
-            0.5, 512, 0.3, 0.2
+            0.5, 384, 0.6, 0.5
         )
         self.metricas["llamadas_modelo"] += 1
         if r.get("exito") and r.get("respuesta", "").strip():
