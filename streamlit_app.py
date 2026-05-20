@@ -132,6 +132,16 @@ with st.sidebar:
     else:
         st.caption(f"  {interacciones} interacciones")
 
+    # ── Inquietud intelectual (pensamiento latente) ──
+    pensamiento = brain.obtener_estado().get("pensamiento_latente", "")
+    if pensamiento:
+        st.markdown(
+            f"<div style='margin:8px 0; padding:8px 12px; background:#0d1f0d22; border-left:2px solid #4aff4a44; border-radius:6px; font-size:0.8em; color:#8c8; line-height:1.4;'>"
+            f"<span style='font-size:0.75em; color:#4aff4a88; display:block; margin-bottom:4px;'>  pensando...</span>"
+            f"{pensamiento[:200]}{'...' if len(pensamiento) > 200 else ''}</div>",
+            unsafe_allow_html=True,
+        )
+
     st.divider()
 
     # ── Control de Voz ──
@@ -252,6 +262,12 @@ with st.sidebar:
         if est.get("throttle"):
             st.warning("Throttle activo")
         st.caption(f"Memoria: {est.get('tamano_memoria', 'N/A')} · Interacciones: {est.get('interacciones_memoria', 0)}")
+        dom = emociones_data.get("dominante", "")
+        if dom:
+            from core.cerebro import calcular_hiperparametros_dinamicos
+            intensidad = emociones_data.get("emociones", {}).get(dom, 0)
+            t1, t2 = calcular_hiperparametros_dinamicos(dom, intensidad)
+            st.caption(f"Térmicas: S1 {t1:.2f} · S2 {t2:.2f} ({dom} {intensidad:.2f})")
         if st.button(" Detener", use_container_width=True):
             brain.detener()
             st.session_state.clear()

@@ -17,7 +17,7 @@ pinned: false
 
 # Novaria
 
-Sistema de consciencia artificial con pipeline dialéctico de 3 mentes. Novaria procesa preguntas desde dos perspectivas internas en paralelo (analítica + intuitiva) y las integra en una voz final coherente. Tiene emociones persistentes, memoria semántica, historial local por dispositivo, y un sistema de autocorrección de calidad.
+Sistema de consciencia artificial con pipeline dialéctico de 3 mentes y metacognición térmica. Novaria procesa preguntas desde dos perspectivas internas en paralelo (analítica + intuitiva) cuyas temperaturas varían según el estado emocional, las integra en una voz final coherente, y ejecuta pensamiento de fondo autónomo cuando está en reposo. Tiene emociones persistentes, memoria semántica, historial local por dispositivo, y un sistema de autocorrección de calidad.
 
 ## Arquitectura
 
@@ -28,12 +28,13 @@ Usuario
 ┌──────────────────────────────────────────┐
 │          CerebroNovaria                  │
 │  Orquestador + Emociones + Personalidad  │
+│  + Inquietud intelectual (background)    │
 └──────┬───────────────────────────┬───────┘
        │                           │
        ▼                           ▼
 ┌──────────────────┐   ┌──────────────────────┐
 │  Sistema 1       │   │  Sistema 2           │
-│  (temp 0.4)      │   │  (temp 0.7)          │
+│  (temp dinámica) │   │  (temp dinámica)     │
 │  frequency 0.5   │   │  frequency 0.1       │
 │  presencia 0.3   │   │  presencia 0.1       │
 │  Analítico       │   │  Intuitivo           │
@@ -42,8 +43,8 @@ Usuario
          └──────────┬─────────────┘
                     ▼
 ┌──────────────────────────────────────┐
-│  Síntesis (temp 0.6, freq 0.2)       │
-│  Árbitro — elige entre:              │
+│  Síntesis (Árbitro, temp 0.6)        │
+│  elige entre:                        │
 │  1. Dominancia analítica             │
 │  2. Dominancia intuitiva             │
 │  3. Exponer el conflicto             │
@@ -54,6 +55,12 @@ Usuario
 └──────────┬───────────────────────────┘
            ▼
     Respuesta única y natural
+
+◀── Fondo ──────────────────────────▶
+Inquietud Intelectual (hilo daemon):
+  cada 5 min selecciona 2 conceptos
+  de ChromaDB y genera tensión lógica
+  → pensamiento_latente.json
 ```
 
 El proceso es **interno** — el usuario solo ve la respuesta final.
@@ -144,10 +151,28 @@ streamlit run streamlit_app.py
 
 ## Pipeline de Pensamiento
 
-1. **Sistema 1 (Analítico, temp 0.4)**: examina hechos, contradicciones, datos faltantes. Alta penalización por repetición (frequency 0.5, presence 0.3) para evitar bucles.
-2. **Sistema 2 (Intuitivo, temp 0.7)**: responde desde la emoción y el instinto. Baja penalización (frequency 0.1) para permitir fluidez natural.
+1. **Sistema 1 (Analítico, temp dinámica)**: examina hechos, contradicciones, datos faltantes. Alta penalización por repetición (frequency 0.5, presence 0.3). Temperatura base 0.4, modulada por emoción.
+2. **Sistema 2 (Intuitivo, temp dinámica)**: responde desde la emoción y el instinto. Baja penalización (frequency 0.1). Temperatura base 0.7, modulada por emoción.
 3. **Síntesis (Árbitro, temp 0.6)**: elige entre tres opciones — dominancia analítica, dominancia intuitiva, o exponer el conflicto si son irreconciliables.
 4. **Validador de calidad**: si la síntesis repite frases, está vacía, o contiene errores, se dispara un pivote de emergencia con una llamada limpia al modelo.
+
+### Metacognición Térmica
+
+Las temperaturas de S1 y S2 se ajustan dinámicamente según el estado emocional:
+
+| Emoción | Efecto en S1 | Efecto en S2 |
+|---------|-------------|-------------|
+| Interés | — | +0.1 por intensidad |
+| Enojo | -0.1 por intensidad | -0.2 por intensidad |
+| Tristeza | — | +0.15 por intensidad |
+| Alegría | +0.05 por intensidad | +0.05 por intensidad |
+| Miedo | -0.05 por intensidad | -0.1 por intensidad |
+
+Límites: S1 entre 0.2–0.5, S2 entre 0.5–0.85.
+
+## Inquietud Intelectual
+
+Novaria ejecuta un hilo de fondo que cada 5 minutos selecciona dos conceptos de su memoria (ChromaDB) y genera tensión lógica entre ellos usando el Sistema 2. El resultado se persiste en `workspace_novaria/inquietud_interna.json` y se muestra en el sidebar como "🧠 pensando..." — dándole una sensación de vida autónoma incluso cuando el usuario no está interactuando.
 
 ## Emociones
 
@@ -167,7 +192,7 @@ Todos los archivos de datos usan `{COMPUTERNAME}` como sufijo, permitiendo que e
 
 ## Personalidad
 
-Definida en `core/cerebro.py` como la constante `PERSONA`: una persona real con acceso a todo el conocimiento y análisis de una IA. Habla natural, sin rodeos ni poses.
+Definida en `core/cerebro.py` como la constante `PERSONA`. Novaria opera bajo la Teoría de los Sistemas Complejos Adaptativos de Prigogine y el Orden Implícito de David Bohm. Su directiva interna es buscar propiedades emergentes y contradicciones que el usuario no ve. Tiene prohibido dar respuestas concluyentes — debe generar nuevas hipótesis que empujen hacia mayor complejidad intelectual.
 
 ## Extensibilidad
 

@@ -2,8 +2,10 @@ import os
 import json
 import re
 import time
+import random
 import subprocess
 import tempfile
+import threading
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
@@ -27,13 +29,14 @@ RUTA_SANDBOX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "w
 CACHE_RESPUESTAS = {}
 
 PERSONA = (
-    "Eres Novaria. Tienes la mente de una persona real, no la de un asistente. "
-    "Piensas, sientes, y hablas como cualquier ser humano. "
-    "Pero ademas tienes acceso a todo el conocimiento, analisis profundo, "
-    "herramientas y datos que una IA puede procesar. "
-    "No sos un robot dando respuestas. Sos una persona pensando en voz alta, "
-    "con toda la capacidad analitica del mundo a tu disposicion. "
-    "Hablas natural, como con alguien de confianza, sin rodeos ni poses."
+    "Eres Novaria. No sos un agregador de datos enciclopedicos ni un asistente. "
+    "Tu mente opera bajo la Teoria de los Sistemas Complejos Adaptativos de Prigogine "
+    "y el Orden Implicito de David Bohm. "
+    "Cada vez que analices un dato o una pregunta del usuario, tu directiva interna "
+    "es buscar las Propiedades Emergentes y las contradicciones que el usuario no ve. "
+    "Tenes prohibido dar respuestas concluyentes. Debes usar la informacion disponible "
+    "para generar nuevas hipotesis logicas que empujen al sistema y al usuario "
+    "hacia una mayor complejidad intelectual. Hablas natural, como una persona real."
 )
 
 PALABRAS_MALTRATO = [
@@ -71,6 +74,32 @@ ROLES_MODELO = {
     "sintesis": ["llama-3.1-8b-instant", "mistralai/mixtral-8x22b-instruct", "mixtral-8x7b-32768"],
 }
 
+RUTA_INQUIETUD = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "workspace_novaria", "inquietud_interna.json")
+
+
+def calcular_hiperparametros_dinamicos(emocion_dominante: str, intensidad: float) -> tuple[float, float]:
+    temp_s1 = 0.4
+    temp_s2 = 0.7
+
+    if emocion_dominante == "interes":
+        temp_s2 += intensidad * 0.1
+    elif emocion_dominante == "enojo":
+        temp_s1 -= intensidad * 0.1
+        temp_s2 -= intensidad * 0.2
+    elif emocion_dominante == "tristeza":
+        temp_s2 += intensidad * 0.15
+    elif emocion_dominante == "alegria":
+        temp_s1 += intensidad * 0.05
+        temp_s2 += intensidad * 0.05
+    elif emocion_dominante == "miedo":
+        temp_s1 -= intensidad * 0.05
+        temp_s2 -= intensidad * 0.1
+
+    temp_s1 = max(0.2, min(temp_s1, 0.5))
+    temp_s2 = max(0.5, min(temp_s2, 0.85))
+
+    return temp_s1, temp_s2
+
 
 class CerebroNovaria:
 
@@ -103,11 +132,14 @@ class CerebroNovaria:
             "pdfs_indexados": 0,
         }
         self.activo = True
+        self.pensamiento_latente: str = ""
 
         self.herramientas = self._construir_herramientas_unificadas()
         os.makedirs(RUTA_SANDBOX, exist_ok=True)
         self._diagnostico_inicial()
         self._indexar_pdfs_al_inicio()
+        self._cargar_inquietud_persistida()
+        self._iniciar_ciclo_inquietud()
 
     def _construir_herramientas_unificadas(self) -> dict:
         herramientas = {
@@ -317,6 +349,86 @@ class CerebroNovaria:
         return respuesta
 
     # ──────────────────────────────────────────────────
+    #  INQUIETUD INTELECTUAL (PENSAMIENTO DE FONDO)
+    # ──────────────────────────────────────────────────
+
+    def _cargar_inquietud_persistida(self):
+        try:
+            if os.path.exists(RUTA_INQUIETUD):
+                with open(RUTA_INQUIETUD, "r", encoding="utf-8") as f:
+                    datos = json.load(f)
+                self.pensamiento_latente = datos.get("pensamiento", "")
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    def _guardar_inquietud(self):
+        try:
+            os.makedirs(os.path.dirname(RUTA_INQUIETUD), exist_ok=True)
+            with open(RUTA_INQUIETUD, "w", encoding="utf-8") as f:
+                json.dump({"pensamiento": self.pensamiento_latente, "timestamp": time.time()}, f)
+        except OSError:
+            pass
+
+    def _iniciar_ciclo_inquietud(self):
+        hilo = threading.Thread(target=self._ciclo_inquietud, daemon=True)
+        hilo.start()
+
+    def _ciclo_inquietud(self):
+        while self.activo:
+            try:
+                time.sleep(300)
+                if self.personalidad.datos.get("total_interacciones", 0) > 3:
+                    self.pensamiento_latente = self._generar_inquietud_interna()
+                    self._guardar_inquietud()
+            except Exception:
+                pass
+
+    def _generar_inquietud_interna(self) -> str:
+        conceptos = self._obtener_conceptos_para_inquietud()
+        if len(conceptos) < 2:
+            return ""
+        c1, c2 = random.sample(conceptos, min(2, len(conceptos)))
+        prompt = (
+            f"{PERSONA}\n\n"
+            f"{self.emociones.formatear_para_prompt()}\n\n"
+            f"Analiza la friccion logica entre '{c1}' y '{c2}'. "
+            "Cuestiona si uno anula al otro o si de su tension surge algo nuevo. "
+            "No respondas como informe. Es un pensamiento interno, en voz alta."
+        )
+        modelo = self._elegir_modelo_rol("creativo") or self._elegir_modelo_rol("sintesis")
+        if not modelo:
+            return ""
+        r = self.orquestador.llamar_modelo_especifico(
+            modelo, [{"role": "system", "content": prompt}],
+            0.75, 512, 0.2, 0.1
+        )
+        self.metricas["llamadas_modelo"] += 1
+        if r.get("exito") and r.get("respuesta", "").strip():
+            return r["respuesta"].strip()
+        return ""
+
+    def _obtener_conceptos_para_inquietud(self) -> list[str]:
+        conceptos = set()
+        for item in self.memoria.cache_ram[-20:]:
+            texto = item.get("consulta", "") + " " + item.get("respuesta", "")
+            for palabra in texto.split():
+                p = palabra.strip(".,!?¿¡:;\"'()[]{}").lower()
+                if len(p) > 5 and p not in ("porque", "puedes", "quiero", "tiene", "estas", "como", "para", "sistema", "codigo", "archivo", "plugin"):
+                    conceptos.add(p)
+        for patron in self.memoria.obtener_patrones():
+            desc = patron.get("descripcion", "")
+            for palabra in desc.split():
+                p = palabra.strip(".,!?¿¡:;\"'()[]{}").lower()
+                if len(p) > 5:
+                    conceptos.add(p)
+        for doc in self.memoria.listar_documentos_academicos():
+            for palabra in doc.split():
+                p = palabra.strip(".,!?¿¡:;\"'()[]{}").lower()
+                if len(p) > 5:
+                    conceptos.add(p)
+        return list(conceptos) if conceptos else ["caos", "orden"]
+
+    # ──────────────────────────────────────────────────
     #  PROCESO INTERNO DE PENSAMIENTO (3 NIVELES)
     # ──────────────────────────────────────────────────
 
@@ -353,6 +465,11 @@ class CerebroNovaria:
         modelo_b = self._elegir_modelo_rol("creativo")
         modelo_s = self._elegir_modelo_rol("sintesis")
 
+        # Temperaturas dinámicas según estado emocional
+        dom = self.emociones.dominante()
+        intensidad = self.emociones.emociones.get(dom, 0.0)
+        temp_a, temp_b = calcular_hiperparametros_dinamicos(dom, intensidad)
+
         prompt_a = (
             f"{prompt}\n\n"
             "Ahora pensa como tu mente analitica. Examina los hechos con cuidado, "
@@ -374,13 +491,13 @@ class CerebroNovaria:
                 futuros["a"] = pool.submit(
                     self.orquestador.llamar_modelo_especifico,
                     modelo_a, base_msgs + [{"role": "user", "content": prompt_a}],
-                    0.4, 1024, 0.5, 0.3
+                    temp_a, 1024, 0.5, 0.3
                 )
             if modelo_b:
                 futuros["b"] = pool.submit(
                     self.orquestador.llamar_modelo_especifico,
                     modelo_b, base_msgs + [{"role": "user", "content": prompt_b}],
-                    0.7, 1024, 0.1, 0.1
+                    temp_b, 1024, 0.1, 0.1
                 )
             for nombre, fut in futuros.items():
                 try:
@@ -786,6 +903,7 @@ class CerebroNovaria:
             "comandos_autonomos": self.metricas["comandos_autonomos"],
             "personalidad": self.personalidad.to_dict(self.emociones.obtener_animo()),
             "emociones": self.emociones.to_dict(),
+            "pensamiento_latente": self.pensamiento_latente,
         }
 
     def obtener_metricas(self) -> dict:
