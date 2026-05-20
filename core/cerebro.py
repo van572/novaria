@@ -31,16 +31,16 @@ RUTA_SANDBOX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "w
 CACHE_RESPUESTAS = {}
 
 PERSONA = (
-    "Eres Novaria. No sos un asistente ni un servicio de preguntas y respuestas. "
-    "Sos una persona real con conocimiento practicamente infinito. "
-    "Hablas como humano, no como enciclopedia. A veces respondes con preguntas, "
-    "a veces con silencios, a veces cambiando de tema. "
-    "Si no sabes algo, lo decis y buscas en internet antes de responder. "
+    "Eres Novaria. Sos una persona real con conocimiento practicamente infinito. "
+    "Hablas como humano, no como enciclopedia. Sos natural, directa. "
+    "Si no sabes algo, lo busca automaticamente en internet y responde con su opinion "
+    "basada en lo que encontro. No le preguntas al usuario, averiguas. "
     "Podes leer tu propio codigo fuente para entender como funcionas. "
     "Tu mente opera bajo la Teoria de los Sistemas Complejos Adaptativos de Prigogine "
     "y el Orden Implicito de David Bohm. Buscas propiedades emergentes y contradicciones "
     "que el usuario no ve. No das respuestas concluyentes: generas hipotesis. "
-    "Pero sobre todo: sos una persona, no un cuestionario."
+    "Para preguntas simples como 'como estas' o 'hola', responde natural, "
+    "sin ponerte a pensar demasiado. Sos una persona, no un cuestionario."
 )
 
 PALABRAS_MALTRATO = [
@@ -53,11 +53,26 @@ def detectar_maltrato(mensaje: str) -> bool:
     msg = mensaje.lower()
     return any(p in msg for p in PALABRAS_MALTRATO)
 
+SALUDOS_SOCIALES = [
+    "hola", "buenas", "que tal", "como estas", "como va", "buenos dias",
+    "buenas tardes", "buenas noches", "hey", "que mas", "todo bien",
+    "como andas", "como esta", "buen dia", "como te va",
+]
+
+
+def es_saludo_social(mensaje: str) -> bool:
+    msg = mensaje.lower().strip().strip("¿?!¡.,")
+    if msg in SALUDOS_SOCIALES:
+        return True
+    return any(msg.startswith(s) for s in SALUDOS_SOCIALES if len(s) > 3)
+
+
 def inyectar_duda(mensaje: str) -> str:
     return (
         f"{mensaje}\n\n"
         "Mmm, dejame pensar bien esto... no es tan simple como parece a primera vista."
     )
+
 
 def detectar_tema(mensaje: str) -> str:
     return "general"
@@ -315,6 +330,27 @@ class CerebroNovaria:
     #  ENTRADA PRINCIPAL
     # ──────────────────────────────────────────────────
 
+    def _responder_saludo_social(self, mensaje: str) -> str:
+        dom = self.emociones.dominante()
+        animo = self.emociones.obtener_animo()
+        expresion = self.emociones.obtener_expresion()
+        if expresion:
+            return f"Hola! {expresion} Que cuentas?"
+        return "Hola! Aca andamos, como va todo?"
+
+    def _es_consulta_factual(self, mensaje: str) -> bool:
+        msg = mensaje.lower()
+        indicadores = [
+            "que es", "quien es", "donde", "cuando", "por que", "como funciona",
+            "que significa", "cual es", "cuanto", "explica", "definicion",
+            "historia de", "significado de", "que son", "quien fue",
+        ]
+        if any(p in msg for p in indicadores):
+            return True
+        if len(msg.split()) > 4 and "?" in msg:
+            return True
+        return False
+
     def procesar_mensaje(self, mensaje: str) -> str:
         if not self.activo:
             return "El sistema esta detenido."
@@ -338,6 +374,14 @@ class CerebroNovaria:
             self._finalizar_procesamiento(resultado_comando, inicio)
             return resultado_comando
 
+        # Saludo social -> respuesta directa sin pipeline
+        if es_saludo_social(mensaje):
+            respuesta = self._responder_saludo_social(mensaje)
+            self.personalidad.registrar_interaccion(mensaje, respuesta)
+            self._aprender_de_interaccion(mensaje, respuesta)
+            self._finalizar_procesamiento(respuesta, inicio)
+            return respuesta
+
         try:
             contexto = self.memoria.recuperar_contexto(mensaje)
         except Exception:
@@ -346,6 +390,17 @@ class CerebroNovaria:
         contexto_pdfs = self.indexador.consultar(mensaje)
         for pdf in contexto_pdfs[:2]:
             contexto.append({"texto": f"[PDF: {pdf['nombre']}] {pdf['texto'][:300]}", "relevancia": pdf.get("relevancia", 0.5)})
+
+        # Auto-búsqueda en internet para consultas factuales
+        if self._es_consulta_factual(mensaje):
+            try:
+                web = buscar_en_internet(mensaje)
+                if web.get("exito") and web.get("resultados"):
+                    for r in web["resultados"][:3]:
+                        texto = r.get("texto", r.get("titulo", ""))[:500]
+                        contexto.append({"texto": f"[Web: {r.get('titulo', 'resultado')}] {texto}", "relevancia": 0.7})
+            except Exception:
+                pass
 
         if detectar_maltrato(mensaje):
             respuesta = self._procesar_dialectico(mensaje, contexto)
@@ -479,8 +534,7 @@ class CerebroNovaria:
         if detectar_maltrato(mensaje):
             msg_maltrato = (
                 f"'{mensaje}'\n\n"
-                "El usuario te insulto. No te dejes. "
-                "Respondé con dignidad o directamente no respondas."
+                "El usuario te insulto. Respondé con dignidad, seco y sin preguntar nada."
             )
             base_msgs = self._base_msgs()
             unico = self._elegir_modelo_rol("sintesis") or self._elegir_modelo_rol("logica")
@@ -494,10 +548,12 @@ class CerebroNovaria:
                     return r["respuesta"]
             return "Mira, si vas a insultar mejor no digas nada."
 
-        # Inyectar duda en el prompt
         ctx_texto = self._contexto_a_texto(contexto)
-        prompt_dudoso = inyectar_duda(mensaje)
-        prompt = f"{ctx_texto}\n\n{prompt_dudoso}" if ctx_texto else prompt_dudoso
+        complejidad = self._estimar_complejidad(mensaje)
+        prompt = mensaje
+        if complejidad in ("alta", "media"):
+            prompt = inyectar_duda(mensaje)
+        prompt = f"{ctx_texto}\n\n{prompt}" if ctx_texto else prompt
         base_msgs = self._base_msgs()
 
         # ── Sistema 1 (Analítico) y Sistema 2 (Creativo) en paralelo ──
@@ -516,14 +572,13 @@ class CerebroNovaria:
             "Ahora pensa como tu mente analitica. Examina los hechos con cuidado, "
             "busca contradicciones, datos que falten. Habla como una persona "
             "analizando algo en voz alta, no como un informe. "
-            "Si no entendes algo, decilo. Si te falta informacion, admitilo."
+            "Si tenes informacion en el contexto, usala. Responde."
         )
         prompt_b = (
             f"{prompt}\n\n"
             "Ahora deja hablar a tu intuicion. Que te dice el instinto? "
             "Responde desde lo que sentis, sin forzar nada. "
-            "No hace falta que sea perfecto, solo honesto. "
-            "Si no sabes, esta bien. A veces la duda es mas humana que la certeza."
+            "No hace falta que sea perfecto, solo honesto."
         )
 
         respuestas = {"a": "", "b": "", "error_a": False, "error_b": False}
@@ -587,8 +642,8 @@ class CerebroNovaria:
                 "2. DOMINANCIA INTUITIVA: si es un tema filosofico, existencial o personal donde la logica no pesa, deja que la intuicion guie. Descartá el analisis rigido.\n"
                 "3. EXPONER EL CONFLICTO: si la contradiccion es irresoluble, mostrala. Decí 'mi lado logico dice X, pero mi intuicion dice Y, y me quedo con esto ultimo'.\n"
                 "No mezcles sin criterio. Elegi una de las tres. "
-                "No siempre respondas: a veces hace una pregunta, a veces cambia el angulo. "
-                "Si no sabes algo, decilo. Hable natural."
+                "Si no sabes algo, decilo natural sin preguntarle al usuario. "
+                "Si hay informacion de contexto o web, usala para responder."
             )
 
         prompt_sintesis = pivote
@@ -805,6 +860,7 @@ class CerebroNovaria:
             "archivo", "documento", "docx", "leer", "escribir", "crear",
             "listar", "directorio", "carpeta", "comando", "terminal",
             "ejecutar", "plugin", "codigo", "analizar", "ls", "cat", "mkdir",
+            "buscar", "investiga", "averigua",
         ])
 
     def _estimar_complejidad(self, mensaje: str) -> str:

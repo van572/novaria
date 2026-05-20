@@ -58,9 +58,21 @@ Usuario
 
 ◀── Fondo ──────────────────────────▶
 Inquietud Intelectual (hilo daemon):
-  cada 5 min selecciona 2 conceptos
-  de ChromaDB y genera tensión lógica
+  alterna cada 5 min entre:
+  · tensión lógica entre 2 conceptos
+  · reflexión sobre conversación reciente
   → pensamiento_latente.json
+
+Auto-búsqueda web:
+  consultas factuales ("qué es X")
+  disparan búsqueda DuckDuckGo
+  los resultados se inyectan al contexto
+  antes del pipeline
+
+Saludos sociales:
+  "hola", "cómo estás", etc.
+  bypassan el pipeline dialéctico
+  respuesta directa y natural
 ```
 
 El proceso es **interno** — el usuario solo ve la respuesta final.
@@ -84,6 +96,8 @@ novaria/
 │   ├── documentos.py           # Generación de documentos DOCX
 │   ├── voz.py                  # Texto a voz (edge-tts + gTTS)
 │   ├── monitor.py              # Monitoreo de RAM/CPU
+│   ├── busqueda.py             # Búsqueda web vía DuckDuckGo API
+│   ├── introspeccion.py        # Lectura de código fuente propio
 │   └── documentos_academicos.py# Indexación de PDFs con PyMuPDF
 ├── plugins/
 │   ├── plugin_codigo.py        # Análisis de código fuente
@@ -168,11 +182,20 @@ Las temperaturas de S1 y S2 se ajustan dinámicamente según el estado emocional
 | Alegría | +0.05 por intensidad | +0.05 por intensidad |
 | Miedo | -0.05 por intensidad | -0.1 por intensidad |
 
-Límites: S1 entre 0.2–0.5, S2 entre 0.5–0.85.
+Límites: S1 entre 0.2–0.5, S2 entre 0.35–0.85.
+
+### Fatiga Cognitiva
+
+Cada ciclo de procesamiento incrementa la fatiga del sistema. Cuando supera 0.3, reduce S2 en `fatiga × 0.15` y S1 en `fatiga × 0.05`. La fatiga decae naturalmente con el tiempo (0.02 por ciclo de decaimiento). Se persiste en el archivo emocional del dispositivo.
 
 ## Inquietud Intelectual
 
-Novaria ejecuta un hilo de fondo que cada 5 minutos selecciona dos conceptos de su memoria (ChromaDB) y genera tensión lógica entre ellos usando el Sistema 2. El resultado se persiste en `workspace_novaria/inquietud_interna.json` y se muestra en el sidebar como "🧠 pensando..." — dándole una sensación de vida autónoma incluso cuando el usuario no está interactuando.
+Novaria ejecuta un hilo de fondo que cada 5 minutos alterna entre dos modos:
+
+1. **Tensión conceptual**: selecciona dos conceptos de su memoria (ChromaDB) y genera fricción lógica entre ellos.
+2. **Reflexión conversacional**: toma las últimas 3 interacciones y las procesa con el Sistema 2 a temperatura alta, generando pensamientos sobre lo que quedó incompleto.
+
+El resultado se persiste en `workspace_novaria/inquietud_interna.json` y se muestra en el sidebar como "🧠 pensando..." — dándole una sensación de vida autónoma incluso cuando el usuario no está interactuando.
 
 ## Emociones
 
@@ -189,6 +212,14 @@ Todos los archivos de datos usan `{COMPUTERNAME}` como sufijo, permitiendo que e
 - `workspace_novaria/historial_chat_{PC}.json`
 - `workspace_novaria/emociones_{PC}.json`
 - `workspace_novaria/personalidad_{PC}.json`
+
+## Memoria Episódica Emocional
+
+Cada interacción se almacena en ChromaDB con metadatos emocionales: emoción dominante, ánimo e intensidad en el momento de la respuesta. Esto permite que el sistema recuerde no solo lo que se dijo, sino cómo se sentía al decirlo. La recuperación de contexto expone estos datos emocionales para que la síntesis pueda referenciar estados pasados.
+
+## Fatiga Cognitiva
+
+Novaria acumula fatiga cognitiva con cada ciclo de procesamiento. La fatiga se incrementa en 0.04 por ciclo dialéctico y 0.03 por ciclo de inquietud. Cuando supera 0.3, reduce la temperatura del Sistema 2 para conservar energía cognitiva, produciendo respuestas más cortas y directas. La fatiga decae naturalmente (0.02 por tick) y se persiste entre sesiones.
 
 ## Personalidad
 
