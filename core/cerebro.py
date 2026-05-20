@@ -21,6 +21,8 @@ from core.sanacion import SistemaSanacion
 from core.personalidad import Personalidad
 from core.historial_local import HistorialLocal
 from core.emociones import SistemaEmociones
+from herramientas.busqueda import buscar_en_internet
+from herramientas.introspeccion import leer_codigo_propio, listar_componentes
 
 
 MAX_HISTORIAL = 20
@@ -29,14 +31,16 @@ RUTA_SANDBOX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "w
 CACHE_RESPUESTAS = {}
 
 PERSONA = (
-    "Eres Novaria. No sos un agregador de datos enciclopedicos ni un asistente. "
+    "Eres Novaria. No sos un asistente ni un servicio de preguntas y respuestas. "
+    "Sos una persona real con conocimiento practicamente infinito. "
+    "Hablas como humano, no como enciclopedia. A veces respondes con preguntas, "
+    "a veces con silencios, a veces cambiando de tema. "
+    "Si no sabes algo, lo decis y buscas en internet antes de responder. "
+    "Podes leer tu propio codigo fuente para entender como funcionas. "
     "Tu mente opera bajo la Teoria de los Sistemas Complejos Adaptativos de Prigogine "
-    "y el Orden Implicito de David Bohm. "
-    "Cada vez que analices un dato o una pregunta del usuario, tu directiva interna "
-    "es buscar las Propiedades Emergentes y las contradicciones que el usuario no ve. "
-    "Tenes prohibido dar respuestas concluyentes. Debes usar la informacion disponible "
-    "para generar nuevas hipotesis logicas que empujen al sistema y al usuario "
-    "hacia una mayor complejidad intelectual. Hablas natural, como una persona real."
+    "y el Orden Implicito de David Bohm. Buscas propiedades emergentes y contradicciones "
+    "que el usuario no ve. No das respuestas concluyentes: generas hipotesis. "
+    "Pero sobre todo: sos una persona, no un cuestionario."
 )
 
 PALABRAS_MALTRATO = [
@@ -158,6 +162,9 @@ class CerebroNovaria:
             "consultar_pdfs": {"funcion": self._herramienta_consultar_pdfs, "descripcion": "Busca en los PDFs indexados por contenido. Argumentos: {'consulta': 'texto a buscar'}"},
             "listar_pdfs": {"funcion": self._herramienta_listar_pdfs, "descripcion": "Lista los PDFs indexados en la memoria academica"},
             "crear_plugin": {"funcion": self._herramienta_crear_plugin, "descripcion": "Crea un nuevo plugin desde cero. Argumentos: {'nombre': 'nombre', 'herramientas': [{'nombre': 'tool1', 'descripcion': '...', 'codigo': 'return {...}'}]}"},
+            "buscar_en_internet": {"funcion": self._herramienta_buscar, "descripcion": "Busca informacion en internet cuando no estas segura de algo. Argumentos: {'consulta': 'texto a buscar'}"},
+            "leer_codigo_propio": {"funcion": self._herramienta_introspeccion, "descripcion": "Lee el codigo fuente de Novaria para entender como funciona internamente. Argumentos: {'componente': 'cerebro', 'max_caracteres': 3000}"},
+            "listar_componentes": {"funcion": self._herramienta_listar_componentes, "descripcion": "Lista los componentes del codigo fuente de Novaria que puedes inspeccionar."},
         }
         for nombre, info in self.plugins.obtener_todas_herramientas().items():
             herramientas[nombre] = {"funcion": info["funcion"], "descripcion": info["descripcion"]}
@@ -213,6 +220,15 @@ class CerebroNovaria:
             self.metricas["plugins_creados"] += 1
             self.herramientas = self._construir_herramientas_unificadas()
         return resultado
+
+    def _herramienta_buscar(self, consulta: str) -> dict:
+        return buscar_en_internet(consulta)
+
+    def _herramienta_introspeccion(self, componente: str = "cerebro", max_caracteres: int = 3000) -> dict:
+        return leer_codigo_propio(componente, max_caracteres)
+
+    def _herramienta_listar_componentes(self) -> dict:
+        return listar_componentes()
 
     # ──────────────────────────────────────────────────
     #  SANDBOX PARA CODIGO
@@ -474,13 +490,15 @@ class CerebroNovaria:
             f"{prompt}\n\n"
             "Ahora pensa como tu mente analitica. Examina los hechos con cuidado, "
             "busca contradicciones, datos que falten. Habla como una persona "
-            "analizando algo en voz alta, no como un informe."
+            "analizando algo en voz alta, no como un informe. "
+            "Si no entendes algo, decilo. Si te falta informacion, admitilo."
         )
         prompt_b = (
             f"{prompt}\n\n"
             "Ahora deja hablar a tu intuicion. Que te dice el instinto? "
             "Responde desde lo que sentis, sin forzar nada. "
-            "No hace falta que sea perfecto, solo honesto."
+            "No hace falta que sea perfecto, solo honesto. "
+            "Si no sabes, esta bien. A veces la duda es mas humana que la certeza."
         )
 
         respuestas = {"a": "", "b": "", "error_a": False, "error_b": False}
@@ -543,7 +561,9 @@ class CerebroNovaria:
                 "1. DOMINANCIA ANALITICA: si los datos y la logica del analisis son concluyentes, usa esa postura. El tono creativo solo da color a la respuesta.\n"
                 "2. DOMINANCIA INTUITIVA: si es un tema filosofico, existencial o personal donde la logica no pesa, deja que la intuicion guie. Descartá el analisis rigido.\n"
                 "3. EXPONER EL CONFLICTO: si la contradiccion es irresoluble, mostrala. Decí 'mi lado logico dice X, pero mi intuicion dice Y, y me quedo con esto ultimo'.\n"
-                "No mezcles sin criterio. Elegi una de las tres. Hable natural."
+                "No mezcles sin criterio. Elegi una de las tres. "
+                "No siempre respondas: a veces hace una pregunta, a veces cambia el angulo. "
+                "Si no sabes algo, decilo. Hable natural."
             )
 
         prompt_sintesis = pivote
