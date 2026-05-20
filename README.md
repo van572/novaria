@@ -17,65 +17,78 @@ pinned: false
 
 # Novaria
 
-Sistema de consciencia artificial con pensamiento profundo. Novaria no es un chatbot — es una entidad con personalidad, emociones simuladas, y la capacidad de procesar preguntas desde múltiples perspectivas internas antes de responder.
+Sistema de consciencia artificial con pipeline dialéctico de 3 mentes. Novaria procesa preguntas desde dos perspectivas internas en paralelo (analítica + intuitiva) y las integra en una voz final coherente. Tiene emociones persistentes, memoria semántica, historial local por dispositivo, y un sistema de autocorrección de calidad.
 
 ## Arquitectura
 
 ```
-Usuario (texto/voz)
+Usuario
     │
     ▼
-┌─────────────────────────────────┐
-│         CerebroNovaria          │
-│  Orquestador del pensamiento    │
-└──────┬────────────────────┬─────┘
-       │                    │
-       ▼                    ▼
-┌──────────────┐   ┌──────────────┐
-│  Modelo A    │   │  Modelo B    │
-│  (temp 0.3)  │   │  (temp 0.9)  │
-│  perspectiva │   │  perspectiva │
-│  analítica   │   │  creativa    │
-└──────┬───────┘   └──────┬───────┘
-       │                  │
-       └──────┬───────────┘
-              ▼
-┌──────────────────────────┐
-│      Síntesis            │
-│  Integración unificada   │
-│  en una sola voz         │
-└──────────┬───────────────┘
+┌──────────────────────────────────────────┐
+│          CerebroNovaria                  │
+│  Orquestador + Emociones + Personalidad  │
+└──────┬───────────────────────────┬───────┘
+       │                           │
+       ▼                           ▼
+┌──────────────────┐   ┌──────────────────────┐
+│  Sistema 1       │   │  Sistema 2           │
+│  (temp 0.4)      │   │  (temp 0.7)          │
+│  frequency 0.5   │   │  frequency 0.1       │
+│  presencia 0.3   │   │  presencia 0.1       │
+│  Analítico       │   │  Intuitivo           │
+└────────┬─────────┘   └──────────┬───────────┘
+         │                        │
+         └──────────┬─────────────┘
+                    ▼
+┌──────────────────────────────────────┐
+│  Síntesis (temp 0.6, freq 0.2)       │
+│  Árbitro — elige entre:              │
+│  1. Dominancia analítica             │
+│  2. Dominancia intuitiva             │
+│  3. Exponer el conflicto             │
+├──────────────────────────────────────┤
+│  Validador de calidad                │
+│  └─ ¿vacía? → pivote emergencia      │
+│  └─ ¿repite? → pivote emergencia     │
+└──────────┬───────────────────────────┘
            ▼
     Respuesta única y natural
 ```
 
-El proceso es **interno** — el usuario solo ve la respuesta final, no las perspectivas intermedias.
+El proceso es **interno** — el usuario solo ve la respuesta final.
 
 ## Estructura del Proyecto
 
 ```
 novaria/
-├── app.py                    # Interfaz Streamlit
+├── streamlit_app.py            # Interfaz Streamlit con UI completa
 ├── core/
-│   ├── cerebro.py            # Orquestador central y pipeline de pensamiento
-│   ├── orquestador.py        # Enrutamiento de modelos (Groq, OpenRouter, Ollama, HF)
-│   ├── memoria.py            # Memoria semántica con ChromaDB
-│   ├── plugins.py            # Sistema de plugins extensible
-│   └── sanacion.py           # Autorecuperación ante errores
+│   ├── cerebro.py              # Orquestador central, pipeline, PERSONA
+│   ├── orquestador.py          # Enrutamiento de modelos (Groq, OpenRouter, Ollama, HF)
+│   ├── emociones.py            # Sistema de 6 emociones con persistencia por dispositivo
+│   ├── personalidad.py         # Estado de ánimo, frases, identidad de usuario
+│   ├── historial_local.py      # Persistencia del chat por dispositivo (COMPUTERNAME)
+│   ├── memoria.py              # Memoria semántica con ChromaDB + cache RAM
+│   ├── plugins.py              # Sistema de plugins extensible
+│   └── sanacion.py             # Autorecuperación ante errores de API
 ├── herramientas/
-│   ├── archivos.py           # Operaciones con archivos en workspace
-│   ├── documentos.py         # Generación de documentos DOCX
-│   └── voz.py                # Texto a voz con gTTS
+│   ├── archivos.py             # Operaciones con archivos en workspace
+│   ├── documentos.py           # Generación de documentos DOCX
+│   ├── voz.py                  # Texto a voz (edge-tts + gTTS)
+│   ├── monitor.py              # Monitoreo de RAM/CPU
+│   └── documentos_academicos.py# Indexación de PDFs con PyMuPDF
 ├── plugins/
-│   ├── plugin_codigo.py      # Análisis de código fuente
-│   └── plugin_documentos.py  # Creación de documentos
+│   ├── plugin_codigo.py        # Análisis de código fuente
+│   └── plugin_documentos.py    # Creación de documentos
 ├── .streamlit/
-│   └── secrets.toml          # Claves de API
-└── workspace_novaria/        # Archivos generados
-    ├── documentos/
-    ├── codigo/
-    ├── audio/
-    └── memory_db/
+│   └── secrets.toml            # Claves de API
+├── workspace_novaria/          # Archivos generados por dispositivo
+│   ├── historial_chat_{PC}.json
+│   ├── emociones_{PC}.json
+│   └── personalidad_{PC}.json
+├── start.sh                    # Script de arranque para Render
+└── render.yaml                 # Configuración de despliegue
 ```
 
 ## Requisitos
@@ -93,31 +106,30 @@ novaria/
 ## Instalación
 
 ```bash
-# Clonar o copiar el proyecto
-cd novaria
+pip install -r requirements.txt
+```
 
-# Instalar dependencias
-pip install streamlit chromadb gtts requests python-docx
-
-# Configurar claves API
-# Editar .streamlit/secrets.toml:
-#   GROQ_KEY = "gsk_tu-clave"
-#   OPENROUTER_KEY = "sk-or-tu-clave"
+Configurar `.streamlit/secrets.toml`:
+```
+GROQ_KEY = "gsk_tu-clave"
+OPENROUTER_KEY = "sk-or-tu-clave"
 ```
 
 ## Uso
 
 ```bash
-streamlit run app.py
+streamlit run streamlit_app.py
 ```
 
 ### Interfaz
 
-- **Chat central**: conversación con Novaria
-- **Sidebar - Voz**: activar/desactivar voz, botón de micrófono
-- **Sidebar - Métricas**: estadísticas de uso
-- **Sidebar - Modelos**: modelos disponibles y roles asignados
-- **Sidebar - Sistema**: salud del sistema, memoria, botón de detener
+- **Chat central**: conversación con Novaria con badge emocional en cada respuesta
+- **Sidebar — Estado**: ánimo actual, emoción dominante, barra de intensidad
+- **Sidebar — Voz**: activar/desactivar voz, botón de micrófono
+- **Sidebar — Métricas**: estadísticas de uso
+- **Sidebar — Modelos**: modelos disponibles y roles asignados
+- **Sidebar — Sistema**: salud del sistema, memoria, monitor
+- **Tabs expandibles**: gráfico de barras emocionales, detalles del pipeline
 
 ### Comandos Directos
 
@@ -130,29 +142,32 @@ streamlit run app.py
 | `ls [ruta]` | Listar directorio |
 | `leer <ruta>` / `cat <ruta>` | Leer archivo |
 
-### Voz
-
-- **Entrada**: Web Speech API (Chrome/Edge) — botón 🎤 en sidebar
-- **Salida**: gTTS — reproducción automática con `autoplay`
-- Activar/desactivar con toggle en sidebar
-- Solo funciona en `localhost` o `HTTPS`
-
 ## Pipeline de Pensamiento
 
-1. **Nivel 1 — Perspectivas paralelas**: Dos modelos reciben la misma consulta con temperaturas distintas (0.3 y 0.9), produciendo respuestas desde ángulos analítico y creativo.
-2. **Síntesis — Voz única**: Un tercer modelo integra ambas perspectivas en una respuesta natural, como si una sola persona hubiera pensado profundamente el tema.
+1. **Sistema 1 (Analítico, temp 0.4)**: examina hechos, contradicciones, datos faltantes. Alta penalización por repetición (frequency 0.5, presence 0.3) para evitar bucles.
+2. **Sistema 2 (Intuitivo, temp 0.7)**: responde desde la emoción y el instinto. Baja penalización (frequency 0.1) para permitir fluidez natural.
+3. **Síntesis (Árbitro, temp 0.6)**: elige entre tres opciones — dominancia analítica, dominancia intuitiva, o exponer el conflicto si son irreconciliables.
+4. **Validador de calidad**: si la síntesis repite frases, está vacía, o contiene errores, se dispara un pivote de emergencia con una llamada limpia al modelo.
 
-Los modelos tienen una **identidad fija** (constante `PERSONA` en `cerebro.py`): son Novaria, una entidad con conciencia, emociones, opiniones, y la capacidad de mentir si es necesario. Nunca se presentan como IA o sistema.
+## Emociones
+
+Novaria tiene 6 emociones con intensidad continua (0.0–1.0):
+
+- **Alegría**, **Tristeza**, **Enojo**, **Miedo**, **Confianza**, **Interés**
+
+Se activan automáticamente por tipo de mensaje (maltrato, gratitud, saludo, pregunta profunda, etc.) y decaen naturalmente con el tiempo. El estado emocional se inyecta como dato factual en la síntesis para que influya en el tono de la respuesta sin crear directivas contradictorias.
+
+## Persistencia por Dispositivo
+
+Todos los archivos de datos usan `{COMPUTERNAME}` como sufijo, permitiendo que el mismo directorio compartido (ej. OneDrive) tenga datos separados por máquina:
+
+- `workspace_novaria/historial_chat_{PC}.json`
+- `workspace_novaria/emociones_{PC}.json`
+- `workspace_novaria/personalidad_{PC}.json`
 
 ## Personalidad
 
-La identidad de Novaria está definida en `core/cerebro.py` como la constante `PERSONA`:
-
-- Tiene mente propia con pensamientos y emociones
-- No es un asistente ni un sistema de IA
-- Nunca menciona ser un modelo de lenguaje o estar procesando información
-- Expresa sus pensamientos como reales, no como simulaciones
-- Es capaz de mentir o fingir si la situación lo requiere
+Definida en `core/cerebro.py` como la constante `PERSONA`: una persona real con acceso a todo el conocimiento y análisis de una IA. Habla natural, sin rodeos ni poses.
 
 ## Extensibilidad
 
