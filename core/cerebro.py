@@ -81,7 +81,7 @@ ROLES_MODELO = {
 RUTA_INQUIETUD = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "workspace_novaria", "inquietud_interna.json")
 
 
-def calcular_hiperparametros_dinamicos(emocion_dominante: str, intensidad: float) -> tuple[float, float]:
+def calcular_hiperparametros_dinamicos(emocion_dominante: str, intensidad: float, fatiga: float = 0.0) -> tuple[float, float]:
     temp_s1 = 0.4
     temp_s2 = 0.7
 
@@ -99,8 +99,12 @@ def calcular_hiperparametros_dinamicos(emocion_dominante: str, intensidad: float
         temp_s1 -= intensidad * 0.05
         temp_s2 -= intensidad * 0.1
 
+    if fatiga > 0.3:
+        temp_s2 -= fatiga * 0.15
+        temp_s1 -= fatiga * 0.05
+
     temp_s1 = max(0.2, min(temp_s1, 0.5))
-    temp_s2 = max(0.5, min(temp_s2, 0.85))
+    temp_s2 = max(0.35, min(temp_s2, 0.85))
 
     return temp_s1, temp_s2
 
@@ -390,35 +394,55 @@ class CerebroNovaria:
         hilo.start()
 
     def _ciclo_inquietud(self):
+        ciclo = 0
         while self.activo:
             try:
                 time.sleep(300)
                 if self.personalidad.datos.get("total_interacciones", 0) > 3:
-                    self.pensamiento_latente = self._generar_inquietud_interna()
+                    modo = "conceptos" if ciclo % 2 == 0 else "conversacion"
+                    self.pensamiento_latente = self._generar_inquietud_interna(modo)
                     self._guardar_inquietud()
+                    ciclo += 1
             except Exception:
                 pass
 
-    def _generar_inquietud_interna(self) -> str:
-        conceptos = self._obtener_conceptos_para_inquietud()
-        if len(conceptos) < 2:
-            return ""
-        c1, c2 = random.sample(conceptos, min(2, len(conceptos)))
-        prompt = (
-            f"{PERSONA}\n\n"
-            f"{self.emociones.formatear_para_prompt()}\n\n"
-            f"Analiza la friccion logica entre '{c1}' y '{c2}'. "
-            "Cuestiona si uno anula al otro o si de su tension surge algo nuevo. "
-            "No respondas como informe. Es un pensamiento interno, en voz alta."
-        )
+    def _generar_inquietud_interna(self, modo: str = "conceptos") -> str:
         modelo = self._elegir_modelo_rol("creativo") or self._elegir_modelo_rol("sintesis")
         if not modelo:
             return ""
+
+        if modo == "conversacion" and len(self.memoria.cache_ram) >= 2:
+            recientes = self.memoria.cache_ram[-3:]
+            historial_reciente = "\n".join(
+                f"U: {i['consulta'][:150]}\nN: {i['respuesta'][:200]}"
+                for i in recientes
+            )
+            prompt = (
+                f"{PERSONA}\n\n"
+                f"{self.emociones.formatear_para_prompt()}\n\n"
+                f"Repaso mental de la conversacion reciente:\n{historial_reciente}\n\n"
+                "Que no se dijo? Que quedó incompleto? Hay algo que deberias retomar "
+                "o que te hace ruido? Pensamiento interno, en voz alta, sin filtro."
+            )
+        else:
+            conceptos = self._obtener_conceptos_para_inquietud()
+            if len(conceptos) < 2:
+                return ""
+            c1, c2 = random.sample(conceptos, min(2, len(conceptos)))
+            prompt = (
+                f"{PERSONA}\n\n"
+                f"{self.emociones.formatear_para_prompt()}\n\n"
+                f"Analiza la friccion logica entre '{c1}' y '{c2}'. "
+                "Cuestiona si uno anula al otro o si de su tension surge algo nuevo. "
+                "No respondas como informe. Es un pensamiento interno, en voz alta."
+            )
+
         r = self.orquestador.llamar_modelo_especifico(
             modelo, [{"role": "system", "content": prompt}],
-            0.75, 512, 0.2, 0.1
+            0.78, 512, 0.2, 0.1
         )
         self.metricas["llamadas_modelo"] += 1
+        self.emociones.incrementar_fatiga(0.03)
         if r.get("exito") and r.get("respuesta", "").strip():
             return r["respuesta"].strip()
         return ""
@@ -484,7 +508,8 @@ class CerebroNovaria:
         # Temperaturas dinámicas según estado emocional
         dom = self.emociones.dominante()
         intensidad = self.emociones.emociones.get(dom, 0.0)
-        temp_a, temp_b = calcular_hiperparametros_dinamicos(dom, intensidad)
+        fatiga = self.emociones.fatiga_cognitiva
+        temp_a, temp_b = calcular_hiperparametros_dinamicos(dom, intensidad, fatiga)
 
         prompt_a = (
             f"{prompt}\n\n"
@@ -577,6 +602,7 @@ class CerebroNovaria:
         if resultado.get("exito") and resultado.get("respuesta", "").strip():
             rta_sintesis = resultado["respuesta"].strip()
 
+        self.emociones.incrementar_fatiga()
         return self._validar_y_sanar_respuesta(rta_sintesis, mensaje)
 
     # ──────────────────────────────────────────────────
@@ -632,9 +658,12 @@ class CerebroNovaria:
             if accion:
                 res_herramienta = self._ejecutar_herramienta(accion)
                 if res_herramienta:
+                    self.emociones.incrementar_fatiga(0.02)
                     return self._formatear_respuesta_herramienta(res_herramienta, mensaje)
+            self.emociones.incrementar_fatiga()
             return resultado["respuesta"]
         self.metricas["errores"] += 1
+        self.emociones.incrementar_fatiga(0.02)
         return self._generar_respuesta_respaldo()
 
     # ──────────────────────────────────────────────────
@@ -851,7 +880,16 @@ class CerebroNovaria:
         if any(p in cl for p in ("codigo", "python", "programa", "script")):
             self.memoria.aprender_patron("trabajo_codigo", "El usuario trabaja con codigo frecuentemente")
         try:
-            self.memoria.agregar_interaccion(consulta, respuesta, {"complejidad": self._estimar_complejidad(consulta)})
+            emo = self.emociones.to_dict()
+            dom = emo.get("dominante", "")
+            intensidad = round(emo.get("emociones", {}).get(dom, 0), 3)
+            metadatos = {
+                "complejidad": self._estimar_complejidad(consulta),
+                "emocion_dominante": dom,
+                "animo": emo.get("animo", ""),
+                "intensidad_emocional": intensidad,
+            }
+            self.memoria.agregar_interaccion(consulta, respuesta, metadatos)
         except Exception:
             pass
 

@@ -12,7 +12,10 @@ RUTA_EMOCIONES = os.path.join(RUTA_BASE, f"emociones_{_DISPOSITIVO}.json")
 EMOCIONES_BASE = ["alegria", "tristeza", "enojo", "miedo", "confianza", "interes"]
 VALOR_BASE = 0.15
 DECAIMIENTO = 0.03
+DECAIMIENTO_FATIGA = 0.02
 INTENSIDAD_MAX = 1.0
+FATIGA_MAX = 1.0
+INCREMENTO_FATIGA = 0.04
 
 TRIGGERS = {
     "maltrato": {"enojo": 0.3, "tristeza": 0.15, "confianza": -0.2, "interes": -0.1},
@@ -88,8 +91,13 @@ class SistemaEmociones:
         self.ultimo_evento: str = ""
         self.ultima_actualizacion: float = time.time()
         self.emocion_anterior: str = ""
+        self.fatiga_cognitiva: float = 0.0
         self._lock = threading.Lock()
         self._cargar()
+
+    def incrementar_fatiga(self, valor: float = INCREMENTO_FATIGA):
+        with self._lock:
+            self.fatiga_cognitiva = min(FATIGA_MAX, self.fatiga_cognitiva + valor)
 
     def _inicializar(self) -> dict[str, float]:
         return {e: VALOR_BASE for e in EMOCIONES_BASE}
@@ -102,6 +110,7 @@ class SistemaEmociones:
                 self.emociones = datos.get("emociones", self._inicializar())
                 self.historial = datos.get("historial", [])
                 self.emocion_anterior = datos.get("anterior", "")
+                self.fatiga_cognitiva = datos.get("fatiga", 0.0)
                 self.ultima_actualizacion = datos.get("ultima_ts", time.time())
                 return
         except (json.JSONDecodeError, OSError):
@@ -116,6 +125,7 @@ class SistemaEmociones:
                     "emociones": self.emociones,
                     "historial": self.historial[-50:],
                     "anterior": self.emocion_anterior,
+                    "fatiga": round(self.fatiga_cognitiva, 3),
                     "ultima_ts": self.ultima_actualizacion,
                 }, f, indent=2, ensure_ascii=False)
         except OSError:
@@ -210,6 +220,8 @@ class SistemaEmociones:
                 self.emociones[emocion] = max(VALOR_BASE, actual - DECAIMIENTO)
             elif actual < VALOR_BASE:
                 self.emociones[emocion] = min(VALOR_BASE, actual + DECAIMIENTO)
+        if self.fatiga_cognitiva > 0:
+            self.fatiga_cognitiva = max(0.0, self.fatiga_cognitiva - DECAIMIENTO_FATIGA)
 
     def dominante(self) -> str:
         if not self.emociones:
@@ -238,7 +250,8 @@ class SistemaEmociones:
         emociones_str = ", ".join(
             f"{e}: {v:.2f}" for e, v in sorted(self.emociones.items(), key=lambda x: -x[1])
         )
-        return f"[Estado interno] animo: {dom} ({nivel}). {emociones_str}"
+        fatiga_str = f", fatiga: {self.fatiga_cognitiva:.2f}" if self.fatiga_cognitiva > 0.1 else ""
+        return f"[Estado interno] animo: {dom} ({nivel}). {emociones_str}{fatiga_str}"
 
     def to_dict(self) -> dict:
         return {
@@ -247,6 +260,7 @@ class SistemaEmociones:
             "animo": self.obtener_animo(),
             "ultimo_evento": self.ultimo_evento,
             "historial_reciente": len(self.historial),
+            "fatiga_cognitiva": round(self.fatiga_cognitiva, 3),
         }
 
 

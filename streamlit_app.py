@@ -266,8 +266,10 @@ with st.sidebar:
         if dom:
             from core.cerebro import calcular_hiperparametros_dinamicos
             intensidad = emociones_data.get("emociones", {}).get(dom, 0)
-            t1, t2 = calcular_hiperparametros_dinamicos(dom, intensidad)
-            st.caption(f"Térmicas: S1 {t1:.2f} · S2 {t2:.2f} ({dom} {intensidad:.2f})")
+            fatiga = emociones_data.get("fatiga_cognitiva", 0)
+            t1, t2 = calcular_hiperparametros_dinamicos(dom, intensidad, fatiga)
+            fatiga_bar = f"· Fatiga: {fatiga:.2f}" if fatiga > 0.05 else ""
+            st.caption(f"Térmicas: S1 {t1:.2f} · S2 {t2:.2f} ({dom} {intensidad:.2f}){fatiga_bar}")
         if st.button(" Detener", use_container_width=True):
             brain.detener()
             st.session_state.clear()

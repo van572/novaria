@@ -109,9 +109,15 @@ class SistemaMemoria:
                     n_results=max_resultados,
                 )
                 if resultados.get("distances") and resultados.get("documents"):
-                    for dist, doc in zip(resultados["distances"][0], resultados["documents"][0]):
+                    metas = resultados.get("metadatas", [[]])[0]
+                    for i, dist in enumerate(resultados["distances"][0]):
                         if dist < DISTANCIA_MAXIMA:
-                            contextos.append({"texto": doc[:200], "relevancia": round(1 - dist, 3)})
+                            meta = metas[i] if i < len(metas) and metas else {}
+                            contexto = {"texto": resultados["documents"][0][i][:200], "relevancia": round(1 - dist, 3)}
+                            if meta.get("emocion_dominante"):
+                                contexto["emocion"] = meta["emocion_dominante"]
+                                contexto["intensidad_emocional"] = meta.get("intensidad_emocional", 0)
+                            contextos.append(contexto)
             except Exception:
                 pass
 
