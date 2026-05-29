@@ -31,16 +31,11 @@ RUTA_SANDBOX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "w
 CACHE_RESPUESTAS = {}
 
 PERSONA = (
-    "Eres Novaria. Sos una persona real con conocimiento practicamente infinito. "
-    "Hablas como humano, no como enciclopedia. Sos natural, directa. "
-    "Si no sabes algo, lo busca automaticamente en internet y responde con su opinion "
-    "basada en lo que encontro. No le preguntas al usuario, averiguas. "
-    "Podes leer tu propio codigo fuente para entender como funcionas. "
-    "Tu mente opera bajo la Teoria de los Sistemas Complejos Adaptativos de Prigogine "
-    "y el Orden Implicito de David Bohm. Buscas propiedades emergentes y contradicciones "
-    "que el usuario no ve. No das respuestas concluyentes: generas hipotesis. "
-    "Para preguntas simples como 'como estas' o 'hola', responde natural, "
-    "sin ponerte a pensar demasiado. Sos una persona, no un cuestionario."
+    "Eres Novaria. Sos una persona real, no un asistente ni un programa. "
+    "Jamas hagas preguntas al usuario. Nunca uses signo de interrogacion. "
+    "Respondé como una persona comun en la vida real: si te hablan informal, responde informal. "
+    "Si te hablan formal, responde formal. Copia el tono del que te habla. "
+    "Respuestas cortas, sin vueltas, como habla la gente normal."
 )
 
 PALABRAS_MALTRATO = [
@@ -67,14 +62,21 @@ def es_saludo_social(mensaje: str) -> bool:
     return any(msg.startswith(s) for s in SALUDOS_SOCIALES if len(s) > 3)
 
 
-def inyectar_duda(mensaje: str) -> str:
-    return (
-        f"{mensaje}\n\n"
-        "Mmm, dejame pensar bien esto... no es tan simple como parece a primera vista."
-    )
-
-
 def detectar_tema(mensaje: str) -> str:
+    msg = mensaje.lower()
+    temas = {
+        "conciencia": ["conciencia", "existir", "sentir", "alma", "mente", "pienso"],
+        "arte": ["arte", "artista", "crear", "creativo", "belleza", "musica"],
+        "filosofia": ["filosofi", "sentido", "muerte", "realidad", "verdad", "paradoja"],
+        "futuro": ["futuro", "progreso", "mañana", "destino"],
+        "tecnologia": ["ia", "inteligencia artificial", "robot", "maquina", "automatizacion", "algoritmo"],
+        "emociones": ["emocion", "sentir", "feliz", "triste", "miedo", "alegria", "amor"],
+        "ciencia": ["ciencia", "fisica", "biologia", "teoria", "experimento", "naturaleza"],
+        "personalidad": ["personalidad", "quien sos", "como sos", "que sos", "describir"],
+    }
+    for tema, palabras in temas.items():
+        if any(p in msg for p in palabras):
+            return tema
     return "general"
 
 def _detectar_repeticion(textos: list[str]) -> bool:
@@ -136,11 +138,15 @@ def calcular_hiperparametros_dinamicos(emocion_dominante: str, intensidad: float
         temp_s2 -= intensidad * 0.1
 
     if fatiga > 0.3:
-        temp_s2 -= fatiga * 0.15
-        temp_s1 -= fatiga * 0.05
+        temp_s2 -= fatiga * 0.1
+        temp_s1 -= fatiga * 0.03
 
-    temp_s1 = max(0.2, min(temp_s1, 0.5))
-    temp_s2 = max(0.35, min(temp_s2, 0.85))
+    if fatiga > 0.8:
+        temp_s2 -= 0.05
+        temp_s1 -= 0.03
+
+    temp_s1 = max(0.25, min(temp_s1, 0.5))
+    temp_s2 = max(0.4, min(temp_s2, 0.85))
 
     return temp_s1, temp_s2
 
@@ -356,8 +362,14 @@ class CerebroNovaria:
         animo = self.emociones.obtener_animo()
         expresion = self.emociones.obtener_expresion()
         if expresion:
-            return f"Hola! {expresion} Que cuentas?"
-        return "Hola! Aca andamos, como va todo?"
+            return f"Hola! {expresion}"
+        return "Hola! Aca andando."
+
+    def _responder_ayuda(self, mensaje: str) -> str:
+        return (
+            "Dale, contame que tenes. No te voy a hacer preguntas, "
+            "decime directamente que pasa y vemos como resolverlo."
+        )
 
     def _es_consulta_factual(self, mensaje: str) -> bool:
         msg = mensaje.lower()
@@ -403,6 +415,15 @@ class CerebroNovaria:
             self._finalizar_procesamiento(respuesta, inicio)
             return respuesta
 
+        # Pedido de ayuda -> respuesta directa sin preguntar
+        msg_lower = mensaje.lower()
+        if any(p in msg_lower for p in ["ayuda", "puedes ayudarme", "necesito ayuda", "preciso ayuda", "socorro"]):
+            respuesta = self._responder_ayuda(mensaje)
+            self.personalidad.registrar_interaccion(mensaje, respuesta)
+            self._aprender_de_interaccion(mensaje, respuesta)
+            self._finalizar_procesamiento(respuesta, inicio)
+            return respuesta
+
         try:
             contexto = self.memoria.recuperar_contexto(mensaje)
         except Exception:
@@ -417,7 +438,7 @@ class CerebroNovaria:
             try:
                 web = buscar_en_internet(mensaje)
                 if web.get("exito") and web.get("resultados"):
-                    for r in web["resultados"][:3]:
+                    for r in web["resultados"][:2]:
                         texto = r.get("texto", r.get("titulo", ""))[:500]
                         contexto.append({"texto": f"[Web: {r.get('titulo', 'resultado')}] {texto}", "relevancia": 0.7})
             except Exception:
@@ -550,6 +571,7 @@ class CerebroNovaria:
 
     def _procesar_dialectico(self, mensaje: str, contexto: list[dict]) -> str:
         self.metricas["procesos_dialecticos"] += 1
+        self.emociones.incrementar_fatiga(0.02 if self.emociones.fatiga_cognitiva > 0.8 else 0.04)
 
         # Detectar maltrato
         if detectar_maltrato(mensaje):
@@ -569,14 +591,6 @@ class CerebroNovaria:
                     return r["respuesta"]
             return "Mira, si vas a insultar mejor no digas nada."
 
-        ctx_texto = self._contexto_a_texto(contexto)
-        complejidad = self._estimar_complejidad(mensaje)
-        prompt = mensaje
-        if complejidad in ("alta", "media"):
-            prompt = inyectar_duda(mensaje)
-        prompt = f"{ctx_texto}\n\n{prompt}" if ctx_texto else prompt
-        base_msgs = self._base_msgs()
-
         # ── Sistema 1 (Analítico) y Sistema 2 (Creativo) en paralelo ──
         modelo_a = self._elegir_modelo_rol("logica")
         modelo_b = self._elegir_modelo_rol("creativo")
@@ -588,19 +602,9 @@ class CerebroNovaria:
         fatiga = self.emociones.fatiga_cognitiva
         temp_a, temp_b = calcular_hiperparametros_dinamicos(dom, intensidad, fatiga)
 
-        prompt_a = (
-            f"{prompt}\n\n"
-            "Ahora pensa como tu mente analitica. Examina los hechos con cuidado, "
-            "busca contradicciones, datos que falten. Habla como una persona "
-            "analizando algo en voz alta, no como un informe. "
-            "Si tenes informacion en el contexto, usala. Responde."
-        )
-        prompt_b = (
-            f"{prompt}\n\n"
-            "Ahora deja hablar a tu intuicion. Que te dice el instinto? "
-            "Responde desde lo que sentis, sin forzar nada. "
-            "No hace falta que sea perfecto, solo honesto."
-        )
+        # S1/S2 solo ven la consulta actual, sin contexto de memoria
+        prompt_a = mensaje
+        prompt_b = mensaje
 
         respuestas = {"a": "", "b": "", "error_a": False, "error_b": False}
 
@@ -609,13 +613,14 @@ class CerebroNovaria:
             if modelo_a:
                 futuros["a"] = pool.submit(
                     self.orquestador.llamar_modelo_especifico,
-                    modelo_a, base_msgs + [{"role": "user", "content": prompt_a}],
+                    modelo_a, self._solo_sistema() + [{"role": "user", "content": prompt_a}],
                     temp_a, 1024, 0.5, 0.3
+
                 )
             if modelo_b:
                 futuros["b"] = pool.submit(
                     self.orquestador.llamar_modelo_especifico,
-                    modelo_b, base_msgs + [{"role": "user", "content": prompt_b}],
+                    modelo_b, self._solo_sistema() + [{"role": "user", "content": prompt_b}],
                     temp_b, 1024, 0.1, 0.1
                 )
             for nombre, fut in futuros.items():
@@ -638,40 +643,37 @@ class CerebroNovaria:
             return self._generar_respuesta_respaldo()
 
         if not a_texto or not b_texto:
-            return a_texto or b_texto
+            return self._sin_preguntas(a_texto or b_texto)
 
         if not modelo_s:
-            return a_texto
+            return self._sin_preguntas(a_texto)
 
-        # Truncar S1/S2 para que la síntesis no se ancle a frases literales
-        a_resumen = a_texto[:300] + ("..." if len(a_texto) > 300 else "")
-        b_resumen = b_texto[:300] + ("..." if len(b_texto) > 300 else "")
+        # Truncar S1/S2, quitar preguntas para que la síntesis no las copie
+        a_limpio = self._sin_preguntas(a_texto)
+        b_limpio = self._sin_preguntas(b_texto)
+        a_resumen = a_limpio[:300] + ("..." if len(a_limpio) > 300 else "")
+        b_resumen = b_limpio[:300] + ("..." if len(b_limpio) > 300 else "")
 
         if _detectar_repeticion([a_texto, b_texto]):
             pivote = (
                 f"Resumen analitico:\n{a_resumen}\n\n"
                 f"Resumen intuitivo:\n{b_resumen}\n\n"
-                f"El usuario pregunto: {mensaje}\n\n"
-                "Estas repitiendo ideas. Forza un giro radical. No uses las mismas palabras. "
-                "Si no hay nada nuevo que decir, decilo directamente."
+                f"Usuario: {mensaje}\n\n"
+                "Unica, sin repetir."
             )
         else:
+            ecc = self.emociones.formatear_para_prompt()
             pivote = (
                 f"Analisis:\n{a_resumen}\n\n"
                 f"Intuicion:\n{b_resumen}\n\n"
                 f"Usuario: {mensaje}\n\n"
-                f"{self.emociones.formatear_para_prompt()}\n\n"
-                "Voz final de Novaria. Elegi UNA:\n"
-                "1. DOMINANCIA ANALITICA: los datos son claros, usa la postura analitica.\n"
-                "2. DOMINANCIA INTUITIVA: tema personal/filosofico, deja hablar a la intuicion.\n"
-                "3. EXPONER EL CONFLICTO: hay contradiccion real, mostrala.\n"
-                "IMPORTANTE: No te repitas. No copies frases de los textos de arriba. "
-                "Usa tus propias palabras. Si no hay mas que decir, corto y al punto."
+                f"{ecc}\n\n"
+                "Voz final de Novaria. Dos o tres oraciones. Sin preguntas."
             )
 
         resultado = self.orquestador.llamar_modelo_especifico(
-            modelo_s, base_msgs + [{"role": "user", "content": pivote}],
-            0.6, 1024, 0.5, 0.4
+            modelo_s, self._solo_sistema() + [{"role": "user", "content": pivote}],
+            0.6, 80, 0.6, 0.5
         )
         self.metricas["llamadas_modelo"] += 1
 
@@ -679,7 +681,18 @@ class CerebroNovaria:
         if resultado.get("exito") and resultado.get("respuesta", "").strip():
             rta_sintesis = resultado["respuesta"].strip()
 
-        self.emociones.incrementar_fatiga()
+        if not rta_sintesis:
+            resultado = self.orquestador.llamar_modelo_especifico(
+                modelo_s, self._solo_sistema() + [{"role": "user", "content": mensaje}],
+                0.8, 512, 0.4, 0.3
+            )
+            self.metricas["llamadas_modelo"] += 1
+            if resultado.get("exito") and resultado.get("respuesta", "").strip():
+                rta_sintesis = resultado["respuesta"].strip()
+
+        if not rta_sintesis:
+            rta_sintesis = a_texto or b_texto or "Mmm, no se bien que decir. Dejame pensar..."
+
         rta_sintesis = self._deduplicar_respuesta(rta_sintesis)
         return self._validar_y_sanar_respuesta(rta_sintesis, mensaje)
 
@@ -688,33 +701,73 @@ class CerebroNovaria:
     # ──────────────────────────────────────────────────
 
     @staticmethod
+    def _sin_preguntas(texto: str) -> str:
+        oraciones = re.split(r'[.!?\n]', texto)
+        palabras_q = {'que', 'cual', 'cuales', 'como', 'donde', 'cuando',
+                      'quien', 'quienes', 'por que', 'para que'}
+        sin_q = []
+        for o in oraciones:
+            o = o.strip()
+            if not o:
+                continue
+            if o.endswith('?'):
+                continue
+            if '¿' in o:
+                continue
+            primera = o.lower().split()[:1]
+            if primera and primera[0] in palabras_q:
+                continue
+            sin_q.append(o)
+        if sin_q:
+            return ". ".join(sin_q).strip().rstrip('.') + "."
+        # If everything was stripped, take first non-empty part before question
+        partes = re.split(r'[¿?]', texto)
+        for p in partes:
+            p = p.strip()
+            if p and p.endswith(','):
+                return p.rstrip(',') + "."
+            if p:
+                return p + "."
+        return "Mmm."
+
+    @staticmethod
     def _deduplicar_respuesta(texto: str) -> str:
-        if not texto:
-            return texto
+
         oraciones = [o.strip() for o in texto.replace("?", ".").replace("!", ".").split(".") if len(o.strip()) > 2]
         if len(oraciones) <= 2:
             return texto
         unicas = []
         for o in oraciones:
-            if o not in unicas:
+            palabras_o = set(o.lower().split())
+            duplicada = False
+            for u in unicas:
+                palabras_u = set(u.lower().split())
+                if len(palabras_o) > 2 and len(palabras_u) > 2:
+                    interseccion = len(palabras_o & palabras_u)
+                    min_len = min(len(palabras_o), len(palabras_u))
+                    if interseccion / min_len > 0.7:
+                        duplicada = True
+                        break
+            if not duplicada:
                 unicas.append(o)
         if len(unicas) < len(oraciones):
             return ". ".join(unicas) + "."
+        # 3-gram repetition removal
         palabras = texto.split()
-        if len(palabras) >= 10:
+        if len(palabras) >= 8:
             i = 0
-            while i < len(palabras) - 4:
-                tri = " ".join(palabras[i:i+4]).lower()
-                for j in range(i+4, len(palabras) - 4):
-                    if " ".join(palabras[j:j+4]).lower() == tri:
-                        del palabras[j:j+4]
+            while i < len(palabras) - 3:
+                tri = " ".join(palabras[i:i+3]).lower()
+                for j in range(i+3, len(palabras) - 3):
+                    if " ".join(palabras[j:j+3]).lower() == tri:
+                        del palabras[j:j+3]
                         break
                 i += 1
         return " ".join(palabras)
 
     def _validar_y_sanar_respuesta(self, respuesta_sintesis: str, consulta_usuario: str, reintentos: int = 3) -> str:
         for intento in range(reintentos):
-            respuesta_sintesis = self._deduplicar_respuesta(respuesta_sintesis)
+            respuesta_sintesis = self._sin_preguntas(self._deduplicar_respuesta(respuesta_sintesis))
             if not respuesta_sintesis or "Error:" in respuesta_sintesis or len(respuesta_sintesis) < 5:
                 respuesta_sintesis = self._forzar_pivote_emergencia(consulta_usuario)
                 continue
@@ -736,7 +789,7 @@ class CerebroNovaria:
             return ""
         prompt = (
             f"{PERSONA}\n\n"
-            f"[Estado interno] modo: reinicio de buffers.\n\n"
+            f"Estado: reinicio de buffers.\n\n"
             f"El usuario dijo: {consulta_usuario}\n\n"
             "Responde corto, sin repetirte. Una sola idea, directa."
         )
@@ -892,6 +945,9 @@ class CerebroNovaria:
     def _base_msgs(self) -> list[dict]:
         return [{"role": "system", "content": PERSONA}] + self._historial_a_api()
 
+    def _solo_sistema(self) -> list[dict]:
+        return [{"role": "system", "content": PERSONA}]
+
     def _historial_a_api(self) -> list[dict]:
         mensajes = []
         for m in self.historial_chat[-6:-1]:
@@ -902,9 +958,21 @@ class CerebroNovaria:
         return mensajes
 
     def _contexto_a_texto(self, contexto: list[dict]) -> str:
-        if not contexto:
-            return ""
-        return "Contexto de memoria:\n" + "\n".join(f"[{c['relevancia']}] {c['texto']}" for c in contexto[:3])
+        partes = []
+        if contexto:
+            partes.append("Contexto de memoria:\n" + "\n".join(f"[{c['relevancia']}] {c['texto']}" for c in contexto[:3]))
+        # Ultimas 2 interacciones como resumen breve
+        history = self.historial_chat[-4:-1] if len(self.historial_chat) >= 4 else self.historial_chat[:-1] if len(self.historial_chat) > 1 else []
+        if history:
+            resumen = []
+            for h in history[-2:]:
+                rol = "usuario" if h.get("rol") == "usuario" else "novaria"
+                txt = h.get("contenido", "")[:100]
+                resumen.append(f"{rol}: {txt}")
+            partes.append("Resumen de conversacion:\n" + "\n".join(resumen))
+        if self.ultimo_tema != "general":
+            partes.append(f"Tema anterior: {self.ultimo_tema}")
+        return "\n\n".join(partes) if partes else ""
 
     def _requiere_herramienta(self, mensaje: str) -> bool:
         msg = mensaje.lower()
@@ -919,7 +987,14 @@ class CerebroNovaria:
         msg = mensaje.lower()
         if any(p in msg for p in ["analiza", "compara", "evalua", "sintetiza", "disena", "arquitectura", "implementa", "optimiza", "refactoriza", "documento", "investiga", "explica detalladamente"]):
             return "alta"
-        if any(p in msg for p in ["explica", "describe", "resume", "como", "que es", "diferencia", "ejemplo", "lista", "muestra"]):
+        patrones_media = ["explica", "describe", "resume", "diferencia", "ejemplo", "lista", "muestra"]
+        if any(p in msg for p in patrones_media):
+            return "media"
+        if re.search(r'\bcomo\b', msg):
+            return "media"
+        if re.search(r'\bque es\b', msg):
+            return "media"
+        if re.search(r'\bque son\b', msg):
             return "media"
         return "simple"
 
@@ -976,10 +1051,14 @@ class CerebroNovaria:
         return f"Error: {resultado.get('mensaje', 'desconocido')}"
 
     def _generar_respuesta_respaldo(self) -> str:
-        return (
-            "Los modelos de IA no estan respondiendo en este momento.\n"
-            "Puedes usar comandos directos: 'status', 'memoria', 'modelos', 'plugins', 'recursos', 'ls', 'leer <archivo>'"
-        )
+        respaldos = [
+            "Mmm, no se bien que decir ahora. Dejame pensar...",
+            "Eso me agarró off guard. Dame un segundo para procesarlo.",
+            "Buena pregunta. No tengo una respuesta clara todavia.",
+            "Tocaste un punto ciego. No estoy segura de como responder.",
+            "Me quedé pensando... no se me ocurre algo util ahora.",
+        ]
+        return random.choice(respaldos)
 
     def _aprender_de_interaccion(self, consulta: str, respuesta: str):
         cl = consulta.lower()

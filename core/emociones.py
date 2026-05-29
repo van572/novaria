@@ -221,7 +221,8 @@ class SistemaEmociones:
             elif actual < VALOR_BASE:
                 self.emociones[emocion] = min(VALOR_BASE, actual + DECAIMIENTO)
         if self.fatiga_cognitiva > 0:
-            self.fatiga_cognitiva = max(0.0, self.fatiga_cognitiva - DECAIMIENTO_FATIGA)
+            decaimiento = DECAIMIENTO_FATIGA * (2 if self.fatiga_cognitiva > 0.5 else 1)
+            self.fatiga_cognitiva = max(0.0, self.fatiga_cognitiva - decaimiento)
 
     def dominante(self) -> str:
         if not self.emociones:
@@ -251,7 +252,7 @@ class SistemaEmociones:
             f"{e}: {v:.2f}" for e, v in sorted(self.emociones.items(), key=lambda x: -x[1])
         )
         fatiga_str = f", fatiga: {self.fatiga_cognitiva:.2f}" if self.fatiga_cognitiva > 0.1 else ""
-        return f"[Estado interno] animo: {dom} ({nivel}). {emociones_str}{fatiga_str}"
+        return f"Estado emocional: {dom} ({nivel}). {emociones_str}{fatiga_str}"
 
     def to_dict(self) -> dict:
         return {

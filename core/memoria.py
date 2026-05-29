@@ -94,13 +94,10 @@ class SistemaMemoria:
         except Exception:
             total = 0
 
-        if total == 0 and not self.cache_ram:
+        if total == 0:
             return []
 
         contextos = []
-        if self.cache_ram:
-            for item in self.cache_ram[-3:]:
-                contextos.append({"texto": item["consulta"][:200], "relevancia": 0.5})
 
         if total > 0:
             try:
