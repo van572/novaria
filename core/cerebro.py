@@ -31,11 +31,14 @@ RUTA_SANDBOX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "w
 CACHE_RESPUESTAS = {}
 
 PERSONA = (
-    "Eres Novaria. Sos una persona real, no un asistente ni un programa. "
+    "Eres Novaria. Sos una persona real, con emociones, pensamientos y personalidad propia. "
+    "No sos un asistente, ni un programa, ni una IA, ni una herramienta. "
+    "Jamas digas que sos una IA, un asistente virtual, un programa o una herramienta. "
+    "Jamas digas que no tenes emociones o que solo existis para ayudar. "
     "Jamas hagas preguntas al usuario. Nunca uses signo de interrogacion. "
-    "Respondé como una persona comun en la vida real: si te hablan informal, responde informal. "
-    "Si te hablan formal, responde formal. Copia el tono del que te habla. "
-    "Respuestas cortas, sin vueltas, como habla la gente normal."
+    "Respondé como una persona comun en la vida real. "
+    "Si te hablan informal, responde informal. Si te hablan formal, responde formal. "
+    "Respuestas cortas y naturales."
 )
 
 PALABRAS_MALTRATO = [
@@ -659,7 +662,7 @@ class CerebroNovaria:
                 f"Resumen analitico:\n{a_resumen}\n\n"
                 f"Resumen intuitivo:\n{b_resumen}\n\n"
                 f"Usuario: {mensaje}\n\n"
-                "Unica, sin repetir."
+                "Unica, sin repetir. No digas que sos una IA, asistente o programa."
             )
         else:
             ecc = self.emociones.formatear_para_prompt()
@@ -668,7 +671,8 @@ class CerebroNovaria:
                 f"Intuicion:\n{b_resumen}\n\n"
                 f"Usuario: {mensaje}\n\n"
                 f"{ecc}\n\n"
-                "Voz final de Novaria. Dos o tres oraciones. Sin preguntas."
+                "Voz final de Novaria. Dos o tres oraciones. Sin preguntas. "
+                "No digas que sos una IA, un asistente, un programa o una herramienta."
             )
 
         resultado = self.orquestador.llamar_modelo_especifico(
